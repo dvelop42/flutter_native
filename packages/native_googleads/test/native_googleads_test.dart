@@ -25,11 +25,15 @@ void main() {
                 'appId': methodCall.arguments['appId'] ?? 'test-app-id',
                 'adapterStatus': {},
               };
-            case 'loadInterstitialAd':
+            case 'preloadInterstitialAd':
+              return true;
+            case 'isInterstitialReady':
               return true;
             case 'showInterstitialAd':
               return true;
-            case 'loadRewardedAd':
+            case 'preloadRewardedAd':
+              return true;
+            case 'isRewardedReady':
               return true;
             case 'showRewardedAd':
               return true;
@@ -72,7 +76,7 @@ void main() {
 
     test('initialize with app ID', () async {
       final result = await ads.initialize(appId: 'test-app-123');
-      
+
       expect(result, isNotNull);
       expect(result!['isReady'], true);
       expect(result['appId'], 'test-app-123');
@@ -83,7 +87,7 @@ void main() {
 
     test('initialize without app ID', () async {
       final result = await ads.initialize();
-      
+
       expect(result, isNotNull);
       expect(result!['isReady'], true);
       expect(result['appId'], 'test-app-id');
@@ -95,7 +99,7 @@ void main() {
     test('initializeWithConfig using test config', () async {
       final config = AdConfig.test();
       final result = await ads.initializeWithConfig(config);
-      
+
       expect(result, isNotNull);
       expect(result!['isReady'], true);
       expect(log, [
@@ -113,7 +117,7 @@ void main() {
         testDeviceIds: {'device1': 'device1', 'device2': 'device2'},
       );
       final result = await ads.initializeWithConfig(config);
-      
+
       expect(result, isNotNull);
       expect(result!['isReady'], true);
       expect(log, [
@@ -125,34 +129,34 @@ void main() {
       ]);
     });
 
-    test('loadInterstitialAd', () async {
-      final result = await ads.loadInterstitialAd(
+    test('preloadInterstitialAd', () async {
+      final result = await ads.preloadInterstitialAd(
         adUnitId: 'test-interstitial-123',
       );
-      
+
       expect(result, true);
       expect(log, [
-        isMethodCall('loadInterstitialAd', arguments: {
+        isMethodCall('preloadInterstitialAd', arguments: {
           'adUnitId': 'test-interstitial-123',
         }),
       ]);
     });
 
-    test('loadInterstitialAd with request config', () async {
+    test('preloadInterstitialAd with request config', () async {
       const requestConfig = AdRequestConfig(
         keywords: ['test', 'ads'],
         contentUrl: 'https://example.com',
         nonPersonalizedAds: true,
       );
-      
-      final result = await ads.loadInterstitialAd(
+
+      final result = await ads.preloadInterstitialAd(
         adUnitId: 'test-interstitial-123',
         requestConfig: requestConfig,
       );
-      
+
       expect(result, true);
       expect(log, [
-        isMethodCall('loadInterstitialAd', arguments: {
+        isMethodCall('preloadInterstitialAd', arguments: {
           'adUnitId': 'test-interstitial-123',
           'keywords': ['test', 'ads'],
           'contentUrl': 'https://example.com',
@@ -162,41 +166,44 @@ void main() {
     });
 
     test('showInterstitialAd', () async {
-      final result = await ads.showInterstitialAd();
-      
+      final result =
+          await ads.showInterstitialAd(adUnitId: 'test-interstitial-123');
+
       expect(result, true);
       expect(log, [
-        isMethodCall('showInterstitialAd', arguments: null),
+        isMethodCall('showInterstitialAd', arguments: {
+          'adUnitId': 'test-interstitial-123',
+        }),
       ]);
     });
 
-    test('loadRewardedAd', () async {
-      final result = await ads.loadRewardedAd(
+    test('preloadRewardedAd', () async {
+      final result = await ads.preloadRewardedAd(
         adUnitId: 'test-rewarded-123',
       );
-      
+
       expect(result, true);
       expect(log, [
-        isMethodCall('loadRewardedAd', arguments: {
+        isMethodCall('preloadRewardedAd', arguments: {
           'adUnitId': 'test-rewarded-123',
         }),
       ]);
     });
 
-    test('loadRewardedAd with request config', () async {
+    test('preloadRewardedAd with request config', () async {
       const requestConfig = AdRequestConfig(
         keywords: ['games', 'rewards'],
         testDevices: ['test-device-1'],
       );
-      
-      final result = await ads.loadRewardedAd(
+
+      final result = await ads.preloadRewardedAd(
         adUnitId: 'test-rewarded-123',
         requestConfig: requestConfig,
       );
-      
+
       expect(result, true);
       expect(log, [
-        isMethodCall('loadRewardedAd', arguments: {
+        isMethodCall('preloadRewardedAd', arguments: {
           'adUnitId': 'test-rewarded-123',
           'keywords': ['games', 'rewards'],
           'testDevices': ['test-device-1'],
@@ -205,11 +212,13 @@ void main() {
     });
 
     test('showRewardedAd', () async {
-      final result = await ads.showRewardedAd();
-      
+      final result = await ads.showRewardedAd(adUnitId: 'test-rewarded-123');
+
       expect(result, true);
       expect(log, [
-        isMethodCall('showRewardedAd', arguments: null),
+        isMethodCall('showRewardedAd', arguments: {
+          'adUnitId': 'test-rewarded-123',
+        }),
       ]);
     });
 
@@ -219,7 +228,7 @@ void main() {
           adUnitId: 'test-banner-123',
           size: BannerAdSize.banner,
         );
-        
+
         expect(bannerId, 'banner-id-123');
         expect(log, [
           isMethodCall('loadBannerAd', arguments: {
@@ -234,7 +243,7 @@ void main() {
           adUnitId: 'test-banner-adaptive',
           size: BannerAdSize.adaptive,
         );
-        
+
         expect(bannerId, 'banner-id-123');
         expect(log, [
           isMethodCall('loadBannerAd', arguments: {
@@ -250,13 +259,13 @@ void main() {
           contentUrl: 'https://example.com/content',
           nonPersonalizedAds: true,
         );
-        
+
         final bannerId = await ads.loadBannerAd(
           adUnitId: 'test-banner-123',
           size: BannerAdSize.mediumRectangle,
           requestConfig: requestConfig,
         );
-        
+
         expect(bannerId, 'banner-id-123');
         expect(log, [
           isMethodCall('loadBannerAd', arguments: {
@@ -271,7 +280,7 @@ void main() {
 
       test('showBannerAd', () async {
         final result = await ads.showBannerAd('banner-id-123');
-        
+
         expect(result, true);
         expect(log, [
           isMethodCall('showBannerAd', arguments: {
@@ -282,7 +291,7 @@ void main() {
 
       test('hideBannerAd', () async {
         final result = await ads.hideBannerAd('banner-id-123');
-        
+
         expect(result, true);
         expect(log, [
           isMethodCall('hideBannerAd', arguments: {
@@ -293,7 +302,7 @@ void main() {
 
       test('disposeBannerAd', () async {
         final result = await ads.disposeBannerAd('banner-id-123');
-        
+
         expect(result, true);
         expect(log, [
           isMethodCall('disposeBannerAd', arguments: {
@@ -308,7 +317,7 @@ void main() {
         final nativeAdId = await ads.loadNativeAd(
           adUnitId: 'test-native-123',
         );
-        
+
         expect(nativeAdId, 'native-id-456');
         expect(log, [
           isMethodCall('loadNativeAd', arguments: {
@@ -322,12 +331,12 @@ void main() {
           keywords: ['technology', 'gadgets'],
           testDevices: ['test-device-1', 'test-device-2'],
         );
-        
+
         final nativeAdId = await ads.loadNativeAd(
           adUnitId: 'test-native-123',
           requestConfig: requestConfig,
         );
-        
+
         expect(nativeAdId, 'native-id-456');
         expect(log, [
           isMethodCall('loadNativeAd', arguments: {
@@ -340,7 +349,7 @@ void main() {
 
       test('showNativeAd', () async {
         final result = await ads.showNativeAd('native-id-456');
-        
+
         expect(result, true);
         expect(log, [
           isMethodCall('showNativeAd', arguments: {
@@ -351,7 +360,7 @@ void main() {
 
       test('disposeNativeAd', () async {
         final result = await ads.disposeNativeAd('native-id-456');
-        
+
         expect(result, true);
         expect(log, [
           isMethodCall('disposeNativeAd', arguments: {
@@ -384,7 +393,7 @@ void main() {
 
       // Simulate callbacks from native
       const channel = MethodChannel('native_googleads');
-      
+
       // Test onAdDismissed
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .handlePlatformMessage(
@@ -442,7 +451,7 @@ void main() {
   group('AdConfig', () {
     test('test configuration', () {
       final config = AdConfig.test();
-      
+
       expect(config.testMode, true);
       expect(config.appId, null);
       expect(config.testDeviceIds, {});
@@ -453,10 +462,11 @@ void main() {
         appId: 'prod-app-id',
         testDeviceIds: {'device1': 'device1', 'device2': 'device2'},
       );
-      
+
       expect(config.testMode, false);
       expect(config.appId, 'prod-app-id');
-      expect(config.testDeviceIds, {'device1': 'device1', 'device2': 'device2'});
+      expect(
+          config.testDeviceIds, {'device1': 'device1', 'device2': 'device2'});
     });
 
     test('custom configuration', () {
@@ -465,7 +475,7 @@ void main() {
         testDeviceIds: {'custom-device': 'custom-device'},
         testMode: true,
       );
-      
+
       expect(config.testMode, true);
       expect(config.appId, 'custom-app-id');
       expect(config.testDeviceIds, {'custom-device': 'custom-device'});
@@ -480,9 +490,9 @@ void main() {
         testDevices: ['device1', 'device2'],
         nonPersonalizedAds: true,
       );
-      
+
       final map = config.toMap();
-      
+
       expect(map['keywords'], ['games', 'sports']);
       expect(map['contentUrl'], 'https://example.com');
       expect(map['testDevices'], ['device1', 'device2']);
@@ -494,9 +504,9 @@ void main() {
         keywords: ['news'],
         nonPersonalizedAds: false,
       );
-      
+
       final map = config.toMap();
-      
+
       expect(map['keywords'], ['news']);
       expect(map.containsKey('contentUrl'), false);
       expect(map.containsKey('testDevices'), false);
@@ -505,9 +515,9 @@ void main() {
 
     test('toMap with no parameters', () {
       const config = AdRequestConfig();
-      
+
       final map = config.toMap();
-      
+
       expect(map.isEmpty, true);
     });
   });
@@ -536,25 +546,30 @@ void main() {
   group('AdTestIds', () {
     test('Android test IDs', () {
       expect(AdTestIds.androidAppId, 'ca-app-pub-3940256099942544~3347511713');
-      expect(AdTestIds.androidInterstitial, 'ca-app-pub-3940256099942544/1033173712');
-      expect(AdTestIds.androidRewarded, 'ca-app-pub-3940256099942544/5224354917');
+      expect(AdTestIds.androidInterstitial,
+          'ca-app-pub-3940256099942544/1033173712');
+      expect(
+          AdTestIds.androidRewarded, 'ca-app-pub-3940256099942544/5224354917');
       expect(AdTestIds.androidBanner, 'ca-app-pub-3940256099942544/2435281174');
-      expect(AdTestIds.androidNativeAdvanced, 'ca-app-pub-3940256099942544/3986624511');
+      expect(AdTestIds.androidNativeAdvanced,
+          'ca-app-pub-3940256099942544/3986624511');
     });
 
     test('iOS test IDs', () {
       expect(AdTestIds.iosAppId, 'ca-app-pub-3940256099942544~1458002511');
-      expect(AdTestIds.iosInterstitial, 'ca-app-pub-3940256099942544/4411468910');
+      expect(
+          AdTestIds.iosInterstitial, 'ca-app-pub-3940256099942544/4411468910');
       expect(AdTestIds.iosRewarded, 'ca-app-pub-3940256099942544/1712485313');
       expect(AdTestIds.iosBanner, 'ca-app-pub-3940256099942544/2435281174');
-      expect(AdTestIds.iosNativeAdvanced, 'ca-app-pub-3940256099942544/3986624511');
+      expect(AdTestIds.iosNativeAdvanced,
+          'ca-app-pub-3940256099942544/3986624511');
     });
   });
-  
+
   group('Additional NativeGoogleads Tests', () {
     final NativeGoogleads ads = NativeGoogleads.instance;
     final List<MethodCall> log = <MethodCall>[];
-    
+
     setUp(() {
       log.clear();
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -564,7 +579,11 @@ void main() {
           log.add(methodCall);
           switch (methodCall.method) {
             case 'initialize':
-              return {'isReady': true, 'appId': 'test-app-id', 'adapterStatus': {}};
+              return {
+                'isReady': true,
+                'appId': 'test-app-id',
+                'adapterStatus': {}
+              };
             case 'loadBannerAd':
               return 'banner-id-123';
             case 'disposeBannerAd':
@@ -575,7 +594,7 @@ void main() {
         },
       );
     });
-    
+
     test('validates ad unit ID for empty string', () {
       // Empty ad unit ID should throw ArgumentError
       expect(
@@ -585,22 +604,22 @@ void main() {
         ),
         throwsA(isA<ArgumentError>()),
       );
-      
+
       expect(
         () => ads.loadNativeAd(adUnitId: ''),
         throwsA(isA<ArgumentError>()),
       );
-      
+
       expect(
-        () => ads.loadRewardedAd(adUnitId: ''),
+        () => ads.preloadRewardedAd(adUnitId: ''),
         throwsA(isA<ArgumentError>()),
       );
     });
-    
+
     test('handles multiple banner ads simultaneously', () async {
       final result = await ads.initialize();
       expect(result?['isReady'], true);
-      
+
       // Load multiple banners
       final banner1 = await ads.loadBannerAd(
         adUnitId: 'test-banner-1',
@@ -610,15 +629,15 @@ void main() {
         adUnitId: 'test-banner-2',
         size: BannerAdSize.largeBanner,
       );
-      
+
       expect(banner1, isNotNull);
       expect(banner2, isNotNull);
-      
+
       // Dispose in different order
       await ads.disposeBannerAd(banner2!);
       await ads.disposeBannerAd(banner1!);
     });
-    
+
     test('handles null returns from platform gracefully', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(
@@ -628,16 +647,16 @@ void main() {
           return null;
         },
       );
-      
+
       // Should handle null and return appropriate defaults
       final result = await ads.initialize();
       expect(result, null);
-      
-      final loaded = await ads.loadInterstitialAd(
+
+      final loaded = await ads.preloadInterstitialAd(
         adUnitId: 'test-ad-unit',
       );
       expect(loaded, false);
-      
+
       final bannerId = await ads.loadBannerAd(
         adUnitId: 'test-banner',
         size: BannerAdSize.banner,

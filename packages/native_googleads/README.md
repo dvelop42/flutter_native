@@ -34,7 +34,7 @@ Add `native_googleads` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  native_googleads: ^1.0.0
+  native_googleads: ^0.0.1
 ```
 
 Then run:
@@ -79,7 +79,7 @@ Add your AdMob App ID to `android/app/src/main/AndroidManifest.xml`:
 
 ### iOS Setup
 
-#### 1. Update iOS Deployment Target
+#### 1. Update iOS Deployment Target (or Swift Package Manager)
 
 In your `ios/Podfile`, ensure the platform version is at least 13.0:
 
@@ -156,18 +156,82 @@ if (nativeAdId != null) {
   await ads.showNativeAd(nativeAdId);
 }
 
-// Load and show interstitial ad
-await ads.loadInterstitialAd(
+// Preload and show interstitial ad
+await ads.preloadInterstitialAd(
   adUnitId: 'your-interstitial-ad-unit-id',
 );
-await ads.showInterstitialAd();
+await ads.showInterstitialAd(adUnitId: 'your-interstitial-ad-unit-id');
 
-// Load and show rewarded ad
-await ads.loadRewardedAd(
+// Preload and show rewarded ad
+await ads.preloadRewardedAd(
   adUnitId: 'your-rewarded-ad-unit-id',
 );
-await ads.showRewardedAd();
+await ads.showRewardedAd(adUnitId: 'your-rewarded-ad-unit-id');
 ```
+
+## Caching
+
+This plugin preloads and caches full-screen ads at the platform level per `adUnitId`.
+
+- Preload: call `preloadInterstitialAd(adUnitId)` or `preloadRewardedAd(adUnitId)` ahead of time.
+- Check: use `isInterstitialReady(adUnitId)` or `isRewardedReady(adUnitId)` before showing.
+- Show: call `showInterstitialAd(adUnitId: ...)` or `showRewardedAd(adUnitId: ...)`.
+- Auto-preload: after an ad is dismissed or fails to show, the native layer auto-preloads the next ad for the same `adUnitId` to keep a warm cache.
+
+Best practices:
+- Preload during app start or at natural pauses (e.g., level start).
+- Always check readiness for smoother UX; if not ready, delay or show alternative UI.
+- Use one `adUnitId` per placement; the cache holds one ready ad per type per `adUnitId`.
+
+### Preload → Check → Show (with auto-preload)
+
+```dart
+import 'dart:io';
+import 'package:native_googleads/native_googleads.dart';
+
+final ads = NativeGoogleads.instance;
+late final String interstitialId;
+
+Future<void> initAds() async {
+  await ads.initializeWithConfig(AdConfig.test());
+
+  // Pick your placement’s ad unit ID
+  interstitialId = Platform.isAndroid
+      ? AdTestIds.androidInterstitial
+      : AdTestIds.iosInterstitial;
+
+  // 1) Preload early
+  await ads.preloadInterstitialAd(adUnitId: interstitialId);
+
+  // Optional: listen for lifecycle to reflect auto-preload
+  ads.setAdCallbacks(
+    onAdDismissed: (type) async {
+      if (type == 'interstitial') {
+        // Native side auto-preloads next; check readiness shortly after
+        await Future.delayed(const Duration(milliseconds: 200));
+        final ready = await ads.isInterstitialReady(interstitialId);
+        // update UI state accordingly
+      }
+    },
+  );
+}
+
+Future<void> maybeShowInterstitial() async {
+  // 2) Check readiness before showing
+  final ready = await ads.isInterstitialReady(interstitialId);
+  if (!ready) {
+    // Not ready: request preload again and bail or retry later
+    await ads.preloadInterstitialAd(adUnitId: interstitialId);
+    return;
+  }
+
+  // 3) Show when ready
+  await ads.showInterstitialAd(adUnitId: interstitialId);
+  // After dismiss, the native layer auto-preloads another ad for the same ID
+}
+```
+
+Use the same pattern for rewarded ads with `preloadRewardedAd`, `isRewardedReady`, and `showRewardedAd(adUnitId: ...)`.
 
 ### Using Test Ads
 
@@ -181,7 +245,7 @@ final testAdUnitId = Platform.isAndroid
     ? AdTestIds.androidInterstitial  // Test interstitial for Android
     : AdTestIds.iosInterstitial;      // Test interstitial for iOS
 
-await ads.loadInterstitialAd(adUnitId: testAdUnitId);
+await ads.preloadInterstitialAd(adUnitId: testAdUnitId);
 ```
 
 Available test IDs:
@@ -300,8 +364,8 @@ final requestConfig = AdRequestConfig(
   nonPersonalizedAds: true,
 );
 
-// Load ad with custom configuration
-await ads.loadInterstitialAd(
+// Preload ad with custom configuration
+await ads.preloadInterstitialAd(
   adUnitId: 'your-ad-unit-id',
   requestConfig: requestConfig,
 );
@@ -357,13 +421,15 @@ class _AdExampleState extends State<AdExample> {
         ? AdTestIds.androidInterstitial
         : AdTestIds.iosInterstitial;
 
-    final success = await _ads.loadInterstitialAd(adUnitId: adUnitId);
+    final success = await _ads.preloadInterstitialAd(adUnitId: adUnitId);
     setState(() => _interstitialReady = success);
   }
 
   Future<void> _showInterstitialAd() async {
     if (_interstitialReady) {
-      await _ads.showInterstitialAd();
+      await _ads.showInterstitialAd(adUnitId: Platform.isAndroid
+          ? AdTestIds.androidInterstitial
+          : AdTestIds.iosInterstitial);
     }
   }
 
@@ -407,10 +473,12 @@ class _AdExampleState extends State<AdExample> {
 | `loadNativeAd` | Load a native ad | `adUnitId: String`, `requestConfig: AdRequestConfig?` | `Future<String?>` |
 | `showNativeAd` | Show loaded native ad | `nativeAdId: String` | `Future<bool>` |
 | `disposeNativeAd` | Dispose native ad | `nativeAdId: String` | `Future<bool>` |
-| `loadInterstitialAd` | Load an interstitial ad | `adUnitId: String`, `requestConfig: AdRequestConfig?` | `Future<bool>` |
-| `showInterstitialAd` | Show loaded interstitial | None | `Future<bool>` |
-| `loadRewardedAd` | Load a rewarded ad | `adUnitId: String`, `requestConfig: AdRequestConfig?` | `Future<bool>` |
-| `showRewardedAd` | Show loaded rewarded ad | None | `Future<bool>` |
+| `preloadInterstitialAd` | Preload an interstitial | `adUnitId: String`, `requestConfig: AdRequestConfig?` | `Future<bool>` |
+| `isInterstitialReady` | Check if interstitial ready | `adUnitId: String` | `Future<bool>` |
+| `showInterstitialAd` | Show preloaded interstitial | `adUnitId: String` | `Future<bool>` |
+| `preloadRewardedAd` | Preload a rewarded ad | `adUnitId: String`, `requestConfig: AdRequestConfig?` | `Future<bool>` |
+| `isRewardedReady` | Check if rewarded is ready | `adUnitId: String` | `Future<bool>` |
+| `showRewardedAd` | Show preloaded rewarded ad | `adUnitId: String` | `Future<bool>` |
 | `setAdCallbacks` | Set ad event callbacks | Various callbacks | `void` |
 
 ### AdConfig
@@ -520,7 +588,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-For issues and feature requests, please use the [GitHub issue tracker](https://github.com/yourusername/native_googleads/issues).
+For issues and feature requests, please use the [GitHub issue tracker](https://github.com/dvelop42/flutter_native/issues).
 
 ## Acknowledgments
 
