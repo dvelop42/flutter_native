@@ -11,12 +11,10 @@ A Flutter plugin for integrating Google Mobile Ads (AdMob) using native platform
 - ✅ **Native Implementation** - Direct integration with Google Mobile Ads SDK
 - ✅ **iOS & Android Support** - Full support for both platforms
 - ✅ **Banner Ads** - Display banner ads in various sizes including adaptive
-- ✅ **Native Ads** - Customizable ads that match your app's design
+- ✅ **Native Ads** - Show native ads using simple default layouts
 - ✅ **Interstitial Ads** - Full-screen ads at natural transition points
 - ✅ **Rewarded Ads** - Reward users for watching video ads
 - ✅ **Platform Views** - Native ad rendering using platform-specific views
-- ✅ **Flexible Configuration** - Pass App IDs and configurations from Dart
-- ✅ **Test Mode** - Easy switching between test and production ads
 - ✅ **Comprehensive Callbacks** - Full lifecycle event handling
 - ✅ **Swift Package Manager** - Modern iOS dependency management
 - ✅ **Kotlin Support** - Modern Android implementation
@@ -129,17 +127,10 @@ import 'package:native_googleads/native_googleads.dart';
 // Get the singleton instance
 final ads = NativeGoogleads.instance;
 
-// Initialize with App ID
+// Initialize with App ID (use platform test App ID during development)
 await ads.initialize(appId: 'your-app-id');
 
-// Or initialize with configuration
-final config = AdConfig.production(
-  appId: 'your-app-id',
-  testDeviceIds: {'device-id-1', 'device-id-2'},
-);
-await ads.initializeWithConfig(config);
-
-// Load and show banner ad
+// Load and show a banner ad (programmatic API)
 final bannerId = await ads.loadBannerAd(
   adUnitId: 'your-banner-ad-unit-id',
   size: BannerAdSize.adaptive,
@@ -148,7 +139,7 @@ if (bannerId != null) {
   await ads.showBannerAd(bannerId);
 }
 
-// Load and show native ad
+// Load and show a native ad (programmatic API)
 final nativeAdId = await ads.loadNativeAd(
   adUnitId: 'your-native-ad-unit-id',
 );
@@ -193,24 +184,24 @@ final ads = NativeGoogleads.instance;
 late final String interstitialId;
 
 Future<void> initAds() async {
-  await ads.initializeWithConfig(AdConfig.test());
-
-  // Pick your placement’s ad unit ID
   interstitialId = Platform.isAndroid
       ? AdTestIds.androidInterstitial
       : AdTestIds.iosInterstitial;
 
-  // 1) Preload early
+  // 1) Initialize and preload early
+  await ads.initialize(appId: Platform.isAndroid
+      ? AdTestIds.androidAppId
+      : AdTestIds.iosAppId);
+
   await ads.preloadInterstitialAd(adUnitId: interstitialId);
 
   // Optional: listen for lifecycle to reflect auto-preload
   ads.setAdCallbacks(
     onAdDismissed: (type) async {
       if (type == 'interstitial') {
-        // Native side auto-preloads next; check readiness shortly after
         await Future.delayed(const Duration(milliseconds: 200));
         final ready = await ads.isInterstitialReady(interstitialId);
-        // update UI state accordingly
+        // Update UI state accordingly
       }
     },
   );
@@ -220,14 +211,12 @@ Future<void> maybeShowInterstitial() async {
   // 2) Check readiness before showing
   final ready = await ads.isInterstitialReady(interstitialId);
   if (!ready) {
-    // Not ready: request preload again and bail or retry later
     await ads.preloadInterstitialAd(adUnitId: interstitialId);
     return;
   }
 
   // 3) Show when ready
   await ads.showInterstitialAd(adUnitId: interstitialId);
-  // After dismiss, the native layer auto-preloads another ad for the same ID
 }
 ```
 
@@ -290,7 +279,7 @@ BannerAdSize.fullBanner        // 468x60
 BannerAdSize.leaderboard       // 728x90
 BannerAdSize.adaptive          // Adaptive size based on device width
 
-// Load a banner ad
+// Load a banner ad (programmatic API)
 final bannerId = await ads.loadBannerAd(
   adUnitId: Platform.isAndroid 
     ? AdTestIds.androidBanner 
@@ -298,7 +287,7 @@ final bannerId = await ads.loadBannerAd(
   size: BannerAdSize.adaptive,
 );
 
-// Show the banner
+// Show the banner (programmatic API)
 if (bannerId != null) {
   await ads.showBannerAd(bannerId);
 }
@@ -321,19 +310,24 @@ BannerAdWidget(
 )
 ```
 
+Note:
+- When using `BannerAdWidget`, do not call `showBannerAd`/`hideBannerAd` — the PlatformView handles attaching/detaching the banner.
+- On iOS, the programmatic `showBannerAd` attaches the banner to the root view controller, not inside a widget tree.
+- If you preloaded via `loadBannerAd(...)`, you can render that ad by passing `preloadedBannerId` to the widget: `BannerAdWidget(preloadedBannerId: bannerId, ...)`.
+
 ### Working with Native Ads
 
 Native ads allow you to customize the ad appearance to match your app:
 
 ```dart
-// Load a native ad
+// Load a native ad (programmatic API)
 final nativeAdId = await ads.loadNativeAd(
   adUnitId: Platform.isAndroid 
     ? AdTestIds.androidNativeAdvanced 
     : AdTestIds.iosNativeAdvanced,
 );
 
-// Show the native ad
+// Show the native ad (programmatic API)
 if (nativeAdId != null) {
   await ads.showNativeAd(nativeAdId);
 }
@@ -354,22 +348,10 @@ NativeAdWidget(
 )
 ```
 
-### Advanced Configuration
+Note:
+- If you preloaded via `loadNativeAd(...)`, you can render that ad by passing `preloadedNativeAdId` to the widget: `NativeAdWidget(preloadedNativeAdId: nativeId, ...)`.
 
-```dart
-// Create custom ad request configuration
-final requestConfig = AdRequestConfig(
-  keywords: ['games', 'sports'],
-  contentUrl: 'https://example.com',
-  nonPersonalizedAds: true,
-);
-
-// Preload ad with custom configuration
-await ads.preloadInterstitialAd(
-  adUnitId: 'your-ad-unit-id',
-  requestConfig: requestConfig,
-);
-```
+<!-- Advanced request configuration is currently not supported at the native layer. -->
 
 ## Complete Example
 
@@ -411,12 +393,13 @@ class _AdExampleState extends State<AdExample> {
       },
     );
 
-    // Initialize with test mode for development
-    final config = AdConfig.test();
-    await _ads.initializeWithConfig(config);
+    // Initialize with test App ID for development
+    await _ads.initialize(appId: Platform.isAndroid
+        ? AdTestIds.androidAppId
+        : AdTestIds.iosAppId);
   }
 
-  Future<void> _loadInterstitialAd() async {
+  Future<void> _preloadInterstitialAd() async {
     final adUnitId = Platform.isAndroid
         ? AdTestIds.androidInterstitial
         : AdTestIds.iosInterstitial;
@@ -443,8 +426,8 @@ class _AdExampleState extends State<AdExample> {
           children: [
             Text('Rewards: $_rewardAmount'),
             ElevatedButton(
-              onPressed: _loadInterstitialAd,
-              child: Text('Load Interstitial'),
+              onPressed: _preloadInterstitialAd,
+              child: Text('Preload Interstitial'),
             ),
             ElevatedButton(
               onPressed: _interstitialReady ? _showInterstitialAd : null,
@@ -465,46 +448,21 @@ class _AdExampleState extends State<AdExample> {
 | Method | Description | Parameters | Returns |
 |--------|-------------|------------|---------|
 | `initialize` | Initialize the ads SDK | `appId: String?` | `Future<Map<String, dynamic>?>` |
-| `initializeWithConfig` | Initialize with configuration | `config: AdConfig` | `Future<Map<String, dynamic>?>` |
-| `loadBannerAd` | Load a banner ad | `adUnitId: String`, `size: BannerAdSize`, `requestConfig: AdRequestConfig?` | `Future<String?>` |
+| `loadBannerAd` | Load a banner ad | `adUnitId: String`, `size: BannerAdSize` | `Future<String?>` |
 | `showBannerAd` | Show loaded banner | `bannerId: String` | `Future<bool>` |
 | `hideBannerAd` | Hide loaded banner | `bannerId: String` | `Future<bool>` |
 | `disposeBannerAd` | Dispose banner ad | `bannerId: String` | `Future<bool>` |
-| `loadNativeAd` | Load a native ad | `adUnitId: String`, `requestConfig: AdRequestConfig?` | `Future<String?>` |
+| `loadNativeAd` | Load a native ad | `adUnitId: String` | `Future<String?>` |
 | `showNativeAd` | Show loaded native ad | `nativeAdId: String` | `Future<bool>` |
 | `disposeNativeAd` | Dispose native ad | `nativeAdId: String` | `Future<bool>` |
-| `preloadInterstitialAd` | Preload an interstitial | `adUnitId: String`, `requestConfig: AdRequestConfig?` | `Future<bool>` |
+| `preloadInterstitialAd` | Preload an interstitial | `adUnitId: String` | `Future<bool>` |
 | `isInterstitialReady` | Check if interstitial ready | `adUnitId: String` | `Future<bool>` |
 | `showInterstitialAd` | Show preloaded interstitial | `adUnitId: String` | `Future<bool>` |
-| `preloadRewardedAd` | Preload a rewarded ad | `adUnitId: String`, `requestConfig: AdRequestConfig?` | `Future<bool>` |
+| `preloadRewardedAd` | Preload a rewarded ad | `adUnitId: String` | `Future<bool>` |
 | `isRewardedReady` | Check if rewarded is ready | `adUnitId: String` | `Future<bool>` |
 | `showRewardedAd` | Show preloaded rewarded ad | `adUnitId: String` | `Future<bool>` |
 | `setAdCallbacks` | Set ad event callbacks | Various callbacks | `void` |
 
-### AdConfig
-
-Configuration class for initializing ads:
-
-```dart
-AdConfig({
-  String? appId,
-  Map<String, String> testDeviceIds,
-  bool testMode,
-})
-```
-
-### AdRequestConfig
-
-Configuration for ad requests:
-
-```dart
-AdRequestConfig({
-  List<String>? keywords,
-  String? contentUrl,
-  List<String>? testDevices,
-  bool? nonPersonalizedAds,
-})
-```
 
 ### BannerAdSize
 
@@ -528,14 +486,34 @@ Enum for banner ad sizes:
 The plugin includes test ad unit IDs from Google. Always use test ads during development:
 
 ```dart
-// Test mode configuration
-final config = AdConfig.test();
-await NativeGoogleads.instance.initializeWithConfig(config);
-
 // Use test ad unit IDs
 final testInterstitial = Platform.isAndroid
     ? AdTestIds.androidInterstitial
     : AdTestIds.iosInterstitial;
+```
+
+### Production ID Validation
+
+To help prevent accidental use of Google test ad unit IDs in release:
+
+- Default: warns in release if a test ad unit ID is used.
+- Strict mode: throws an error in release when a test ad unit ID is used.
+- Disable: you can disable the check if needed.
+
+```dart
+// Warn-only (default)
+NativeGoogleads.instance.setAdIdValidationPolicy(
+  disallowTestIdsInRelease: true,
+  strict: false,
+);
+
+// Strict: throw in release when using test IDs
+NativeGoogleads.instance.setAdIdValidationPolicy(strict: true);
+
+// Disable check
+NativeGoogleads.instance.setAdIdValidationPolicy(
+  disallowTestIdsInRelease: false,
+);
 ```
 
 ## Troubleshooting

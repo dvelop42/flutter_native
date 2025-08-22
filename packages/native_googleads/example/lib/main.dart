@@ -22,6 +22,30 @@ class MyApp extends StatelessWidget {
   }
 }
 
+// Shared small UI helpers (kept in this file for the example)
+class StatusChip extends StatelessWidget {
+  final bool ready;
+  const StatusChip({super.key, required this.ready});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: ready ? Colors.green : Colors.red,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        ready ? 'Ready' : 'Not Ready',
+        style: const TextStyle(color: Colors.white),
+      ),
+    );
+  }
+}
+
+// (MiniActionButtons removed; not needed after multi-preload example removal)
+
+
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
@@ -52,6 +76,36 @@ class HomePage extends StatelessWidget {
           const SizedBox(height: 8),
           Card(
             child: ListTile(
+              leading: const Icon(Icons.timer_outlined),
+              title: const Text('Preloaded Fullscreen Ads'),
+              subtitle: const Text('Preload interstitial & rewarded, then show'),
+              trailing: const Icon(Icons.arrow_forward_ios),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PreloadedFullscreenAdsPage()),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.downloading),
+              title: const Text('Preloaded Banner'),
+              subtitle: const Text('Load first, then render via widget'),
+              trailing: const Icon(Icons.arrow_forward_ios),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PreloadedBannerPage()),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
               leading: const Icon(Icons.view_carousel),
               title: const Text('Native Ads'),
               subtitle: const Text('Display native ads that match your app'),
@@ -60,6 +114,21 @@ class HomePage extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const NativeAdPage()),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.downloading),
+              title: const Text('Preloaded Native'),
+              subtitle: const Text('Load first, then render via widget'),
+              trailing: const Icon(Icons.arrow_forward_ios),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PreloadedNativePage()),
                 );
               },
             ),
@@ -111,6 +180,7 @@ class BannerAdPage extends StatefulWidget {
 class _BannerAdPageState extends State<BannerAdPage> {
   BannerAdSize _selectedSize = BannerAdSize.adaptive;
   bool _showAd = false;
+  bool _bannerVisible = true; // hide slot on failure
 
   @override
   void initState() {
@@ -238,34 +308,37 @@ class _BannerAdPageState extends State<BannerAdPage> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Container(
-                  color: Colors.grey[200],
-                  padding: const EdgeInsets.all(8.0),
-                  child: BannerAdWidget(
-                    key: ValueKey(_selectedSize),
-                    adUnitId: adUnitId,
-                    size: _selectedSize,
-                    onAdLoaded: () {
-                      debugPrint('Banner ad loaded');
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Banner ad loaded successfully!'),
-                          backgroundColor: Colors.green,
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                    onAdFailedToLoad: (error) {
-                      debugPrint('Banner ad failed to load: $error');
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Failed: $error'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    },
+                if (_bannerVisible)
+                  Container(
+                    color: Colors.grey[200],
+                    padding: const EdgeInsets.all(8.0),
+                    child: BannerAdWidget(
+                      key: ValueKey(_selectedSize),
+                      adUnitId: adUnitId,
+                      size: _selectedSize,
+                      onAdLoaded: () {
+                        setState(() => _bannerVisible = true);
+                        debugPrint('Banner ad loaded');
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Banner ad loaded successfully!'),
+                            backgroundColor: Colors.green,
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      onAdFailedToLoad: (error) {
+                        debugPrint('Banner ad failed to load: $error');
+                        setState(() => _bannerVisible = false); // gracefully hide slot
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Banner unavailable, slot hidden'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                ),
               ],
             ),
           const Spacer(),
@@ -295,6 +368,90 @@ class _BannerAdPageState extends State<BannerAdPage> {
   }
 }
 
+// Preloaded Banner Page
+class PreloadedBannerPage extends StatefulWidget {
+  const PreloadedBannerPage({super.key});
+
+  @override
+  State<PreloadedBannerPage> createState() => _PreloadedBannerPageState();
+}
+
+class _PreloadedBannerPageState extends State<PreloadedBannerPage> {
+  final NativeGoogleads _ads = NativeGoogleads.instance;
+  String? _bannerId;
+  BannerAdSize _size = BannerAdSize.adaptive;
+  String _status = 'Idle';
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeAds();
+  }
+
+  Future<void> _initializeAds() async {
+    await _ads.initialize(appId: Platform.isAndroid
+        ? AdTestIds.androidAppId
+        : AdTestIds.iosAppId);
+  }
+
+  Future<void> _preload() async {
+    setState(() => _status = 'Loading...');
+    final id = await _ads.loadBannerAd(
+      adUnitId: Platform.isAndroid ? AdTestIds.androidBanner : AdTestIds.iosBanner,
+      size: _size,
+    );
+    setState(() {
+      _bannerId = id;
+      _status = id != null ? 'Ready' : 'Failed';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Preloaded Banner'), backgroundColor: Theme.of(context).colorScheme.inversePrimary),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(
+            children: [
+              const Text('Size:'),
+              const SizedBox(width: 8),
+              DropdownButton<BannerAdSize>(
+                value: _size,
+                onChanged: (v) => setState(() => _size = v ?? _size),
+                items: [
+                  for (final s in BannerAdSize.values)
+                    DropdownMenuItem(value: s, child: Text(s.name)),
+                ],
+              ),
+              const Spacer(),
+              ElevatedButton.icon(onPressed: _preload, icon: const Icon(Icons.download), label: const Text('Preload')),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text('Status: $_status'),
+          const SizedBox(height: 12),
+          if (_bannerId != null)
+            Container(
+              padding: const EdgeInsets.all(8),
+              color: Colors.grey[200],
+              child: BannerAdWidget(
+                adUnitId: Platform.isAndroid ? AdTestIds.androidBanner : AdTestIds.iosBanner,
+                size: _size,
+                preloadedBannerId: _bannerId,
+                onAdFailedToLoad: (_) {
+                  if (!mounted) return;
+                  setState(() => _status = 'Failed to render');
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 // Native Ad Page
 class NativeAdPage extends StatefulWidget {
   const NativeAdPage({super.key});
@@ -304,6 +461,7 @@ class NativeAdPage extends StatefulWidget {
 }
 
 class _NativeAdPageState extends State<NativeAdPage> {
+  bool _showNativeSlot = true; // hide slot on failure
   @override
   void initState() {
     super.initState();
@@ -335,7 +493,7 @@ class _NativeAdPageState extends State<NativeAdPage> {
           itemCount: 12,
           separatorBuilder: (context, index) => const SizedBox(height: 16),
           itemBuilder: (context, index) {
-            if (index == 5) {
+            if (index == 5 && _showNativeSlot) {
               return Card(
                 elevation: 4,
                 child: ConstrainedBox(
@@ -350,6 +508,8 @@ class _NativeAdPageState extends State<NativeAdPage> {
                     adUnitId: adUnitId,
                     backgroundColor: Colors.white,
                     onAdLoaded: () {
+                      if (!mounted) return;
+                      setState(() => _showNativeSlot = true);
                       debugPrint('Native ad loaded');
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -361,10 +521,12 @@ class _NativeAdPageState extends State<NativeAdPage> {
                     },
                     onAdFailedToLoad: (error) {
                       debugPrint('Native ad failed to load: $error');
+                      if (!mounted) return;
+                      setState(() => _showNativeSlot = false); // gracefully skip the slot
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Native ad failed: $error'),
-                          backgroundColor: Colors.red,
+                          content: const Text('Native ad unavailable, skipping slot'),
+                          backgroundColor: Colors.orange,
                         ),
                       );
                     },
@@ -398,6 +560,79 @@ class _NativeAdPageState extends State<NativeAdPage> {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+// Preloaded Native Page
+class PreloadedNativePage extends StatefulWidget {
+  const PreloadedNativePage({super.key});
+
+  @override
+  State<PreloadedNativePage> createState() => _PreloadedNativePageState();
+}
+
+class _PreloadedNativePageState extends State<PreloadedNativePage> {
+  final NativeGoogleads _ads = NativeGoogleads.instance;
+  String? _nativeId;
+  String _status = 'Idle';
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeAds();
+  }
+
+  Future<void> _initializeAds() async {
+    await _ads.initialize(appId: Platform.isAndroid
+        ? AdTestIds.androidAppId
+        : AdTestIds.iosAppId);
+  }
+
+  Future<void> _preload() async {
+    setState(() => _status = 'Loading...');
+    final id = await _ads.loadNativeAd(
+      adUnitId: Platform.isAndroid ? AdTestIds.androidNativeAdvanced : AdTestIds.iosNativeAdvanced,
+    );
+    setState(() {
+      _nativeId = id;
+      _status = id != null ? 'Ready' : 'Failed';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Preloaded Native'), backgroundColor: Theme.of(context).colorScheme.inversePrimary),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(
+            children: [
+              ElevatedButton.icon(onPressed: _preload, icon: const Icon(Icons.download), label: const Text('Preload')),
+              const SizedBox(width: 12),
+              Text('Status: $_status'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_nativeId != null)
+            Card(
+              elevation: 4,
+              child: SizedBox(
+                height: 300,
+                child: NativeAdWidget(
+                  adUnitId: Platform.isAndroid ? AdTestIds.androidNativeAdvanced : AdTestIds.iosNativeAdvanced,
+                  preloadedNativeAdId: _nativeId,
+                  backgroundColor: Colors.white,
+                  onAdFailedToLoad: (_) {
+                    if (!mounted) return;
+                    setState(() => _status = 'Failed to render');
+                  },
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -500,7 +735,7 @@ class _InterstitialAdPageState extends State<InterstitialAdPage> {
 
   String? _interstitialAdUnitId;
 
-  Future<void> _loadInterstitialAd() async {
+  Future<void> _preloadInterstitialAd() async {
     setState(() {
       _status = 'Loading ad...';
     });
@@ -598,9 +833,9 @@ class _InterstitialAdPageState extends State<InterstitialAdPage> {
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
                           ElevatedButton.icon(
-                            onPressed: _loadInterstitialAd,
+                            onPressed: _preloadInterstitialAd,
                             icon: const Icon(Icons.download),
-                            label: const Text('Load Ad'),
+                            label: const Text('Preload'),
                           ),
                           ElevatedButton.icon(
                             onPressed: _isAdReady ? _showInterstitialAd : null,
@@ -628,6 +863,293 @@ class RewardedAdPage extends StatefulWidget {
   @override
   State<RewardedAdPage> createState() => _RewardedAdPageState();
 }
+
+// Preloaded Fullscreen Ads Page (Interstitial + Rewarded)
+class PreloadedFullscreenAdsPage extends StatefulWidget {
+  const PreloadedFullscreenAdsPage({super.key});
+
+  @override
+  State<PreloadedFullscreenAdsPage> createState() => _PreloadedFullscreenAdsPageState();
+}
+
+class _PreloadedFullscreenAdsPageState extends State<PreloadedFullscreenAdsPage> {
+  final NativeGoogleads _ads = NativeGoogleads.instance;
+
+  String? _interstitialId;
+  String? _rewardedId;
+
+  bool _interstitialReady = false;
+  bool _rewardedReady = false;
+  String _interstitialStatus = 'Idle';
+  String _rewardedStatus = 'Idle';
+  int _rewardedEarned = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _setup();
+  }
+
+  Future<void> _setup() async {
+    _ads.setAdCallbacks(
+      onAdDismissed: (type) async {
+        if (!mounted) return;
+        if (type == 'interstitial') {
+          setState(() {
+            _interstitialReady = false;
+            _interstitialStatus = 'Dismissed';
+          });
+          await Future.delayed(const Duration(milliseconds: 200));
+          if (_interstitialId != null) {
+            final ready = await _ads.isInterstitialReady(_interstitialId!);
+            if (!mounted) return;
+            setState(() {
+              _interstitialReady = ready;
+              if (ready) _interstitialStatus = 'Ready';
+            });
+          }
+        } else if (type == 'rewarded') {
+          setState(() {
+            _rewardedReady = false;
+            _rewardedStatus = 'Dismissed';
+          });
+          await Future.delayed(const Duration(milliseconds: 200));
+          if (_rewardedId != null) {
+            final ready = await _ads.isRewardedReady(_rewardedId!);
+            if (!mounted) return;
+            setState(() {
+              _rewardedReady = ready;
+              if (ready) _rewardedStatus = 'Ready';
+            });
+          }
+        }
+      },
+      onAdShowed: (type) {
+        if (!mounted) return;
+        if (type == 'interstitial') {
+          setState(() => _interstitialStatus = 'Showing');
+        } else if (type == 'rewarded') {
+          setState(() => _rewardedStatus = 'Showing');
+        }
+      },
+      onAdFailedToShow: (type, error) async {
+        if (!mounted) return;
+        if (type == 'interstitial') {
+          setState(() => _interstitialStatus = 'Failed: $error');
+          await Future.delayed(const Duration(milliseconds: 200));
+          if (_interstitialId != null) {
+            final ready = await _ads.isInterstitialReady(_interstitialId!);
+            if (!mounted) return;
+            setState(() {
+              _interstitialReady = ready;
+              if (ready) _interstitialStatus = 'Ready';
+            });
+          }
+        } else if (type == 'rewarded') {
+          setState(() => _rewardedStatus = 'Failed: $error');
+          await Future.delayed(const Duration(milliseconds: 200));
+          if (_rewardedId != null) {
+            final ready = await _ads.isRewardedReady(_rewardedId!);
+            if (!mounted) return;
+            setState(() {
+              _rewardedReady = ready;
+              if (ready) _rewardedStatus = 'Ready';
+            });
+          }
+        }
+      },
+      onUserEarnedReward: (type, amount) {
+        if (!mounted) return;
+        setState(() {
+          _rewardedEarned += amount;
+        });
+      },
+    );
+
+    // Initialize with test App ID and preload both
+    await _ads.initialize(appId: Platform.isAndroid
+        ? AdTestIds.androidAppId
+        : AdTestIds.iosAppId);
+
+    _interstitialId = Platform.isAndroid
+        ? AdTestIds.androidInterstitial
+        : AdTestIds.iosInterstitial;
+    _rewardedId = Platform.isAndroid
+        ? AdTestIds.androidRewarded
+        : AdTestIds.iosRewarded;
+
+    await _preloadInterstitial();
+    await _preloadRewarded();
+  }
+
+  Future<void> _preloadInterstitial() async {
+    if (_interstitialId == null) return;
+    setState(() => _interstitialStatus = 'Loading...');
+    final ok = await _ads.preloadInterstitialAd(adUnitId: _interstitialId!);
+    if (!mounted) return;
+    setState(() {
+      _interstitialReady = ok;
+      _interstitialStatus = ok ? 'Ready' : 'Failed to load';
+    });
+  }
+
+  Future<void> _showInterstitial() async {
+    if (!_interstitialReady || _interstitialId == null) return;
+    final ok = await _ads.showInterstitialAd(adUnitId: _interstitialId!);
+    if (!ok && mounted) {
+      setState(() => _interstitialStatus = 'Failed to show');
+    }
+  }
+
+  Future<void> _checkInterstitialReady() async {
+    if (_interstitialId == null) return;
+    final ready = await _ads.isInterstitialReady(_interstitialId!);
+    if (!mounted) return;
+    setState(() {
+      _interstitialReady = ready;
+      if (ready) _interstitialStatus = 'Ready';
+    });
+  }
+
+  Future<void> _preloadRewarded() async {
+    if (_rewardedId == null) return;
+    setState(() => _rewardedStatus = 'Loading...');
+    final ok = await _ads.preloadRewardedAd(adUnitId: _rewardedId!);
+    if (!mounted) return;
+    setState(() {
+      _rewardedReady = ok;
+      _rewardedStatus = ok ? 'Ready' : 'Failed to load';
+    });
+  }
+
+  Future<void> _showRewarded() async {
+    if (!_rewardedReady || _rewardedId == null) return;
+    final ok = await _ads.showRewardedAd(adUnitId: _rewardedId!);
+    if (!ok && mounted) {
+      setState(() => _rewardedStatus = 'Failed to show');
+    }
+  }
+
+  Future<void> _checkRewardedReady() async {
+    if (_rewardedId == null) return;
+    final ready = await _ads.isRewardedReady(_rewardedId!);
+    if (!mounted) return;
+    setState(() {
+      _rewardedReady = ready;
+      if (ready) _rewardedStatus = 'Ready';
+    });
+  }
+
+  List<Widget> _actionButtons({
+    required VoidCallback onPreload,
+    required VoidCallback onRefresh,
+    required VoidCallback onShow,
+    required bool canShow,
+  }) {
+    return [
+      ElevatedButton.icon(
+        onPressed: onPreload,
+        icon: const Icon(Icons.download),
+        label: const Text('Preload'),
+      ),
+      ElevatedButton.icon(
+        onPressed: onRefresh,
+        icon: const Icon(Icons.refresh),
+        label: const Text('Refresh Ready'),
+      ),
+      ElevatedButton.icon(
+        onPressed: canShow ? onShow : null,
+        icon: const Icon(Icons.play_arrow),
+        label: const Text('Show'),
+      ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Preloaded Fullscreen Ads'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.fullscreen, color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 8),
+                      const Text('Interstitial', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      StatusChip(ready: _interstitialReady),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Status: $_interstitialStatus'),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _actionButtons(
+                      onPreload: _preloadInterstitial,
+                      onRefresh: _checkInterstitialReady,
+                      onShow: _showInterstitial,
+                      canShow: _interstitialReady,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.card_giftcard, color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 8),
+                      const Text('Rewarded', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      StatusChip(ready: _rewardedReady),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Status: $_rewardedStatus'),
+                  const SizedBox(height: 4),
+                  Text('Rewards earned: $_rewardedEarned'),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _actionButtons(
+                      onPreload: _preloadRewarded,
+                      onRefresh: _checkRewardedReady,
+                      onShow: _showRewarded,
+                      canShow: _rewardedReady,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 
 class _RewardedAdPageState extends State<RewardedAdPage> {
   final NativeGoogleads _ads = NativeGoogleads.instance;
@@ -722,7 +1244,7 @@ class _RewardedAdPageState extends State<RewardedAdPage> {
 
   String? _rewardedAdUnitId;
 
-  Future<void> _loadRewardedAd() async {
+  Future<void> _preloadRewardedAd() async {
     setState(() {
       _status = 'Loading ad...';
     });
@@ -826,9 +1348,9 @@ class _RewardedAdPageState extends State<RewardedAdPage> {
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
                           ElevatedButton.icon(
-                            onPressed: _loadRewardedAd,
+                            onPressed: _preloadRewardedAd,
                             icon: const Icon(Icons.download),
-                            label: const Text('Load Ad'),
+                            label: const Text('Preload'),
                           ),
                           ElevatedButton.icon(
                             onPressed: _isAdReady ? _showRewardedAd : null,

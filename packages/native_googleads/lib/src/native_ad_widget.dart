@@ -44,6 +44,11 @@ class NativeAdWidget extends StatefulWidget {
   /// Custom template ID for native ads (optional).
   final String? templateId;
 
+  /// Optional preloaded native ad ID returned by `loadNativeAd`.
+  ///
+  /// If provided, the widget will skip loading and render this preloaded ad.
+  final String? preloadedNativeAdId;
+
   const NativeAdWidget({
     super.key,
     required this.adUnitId,
@@ -55,6 +60,7 @@ class NativeAdWidget extends StatefulWidget {
     this.onAdImpression,
     this.backgroundColor,
     this.templateId,
+    this.preloadedNativeAdId,
   });
 
   @override
@@ -72,7 +78,13 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
     super.initState();
     debugPrint(
         'NativeAdWidget: initState called for adUnitId: ${widget.adUnitId}');
-    _loadAd();
+    if (widget.preloadedNativeAdId != null && widget.preloadedNativeAdId!.isNotEmpty) {
+      _nativeAdId = widget.preloadedNativeAdId;
+      _isLoaded = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showAd());
+    } else {
+      _loadAd();
+    }
   }
 
   Future<void> _loadAd() async {
