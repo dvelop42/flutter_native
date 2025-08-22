@@ -1,0 +1,44 @@
+name: native_googleads
+description: A Flutter plugin for integrating Google Mobile Ads (AdMob) using native platform implementations. Supports interstitial and rewarded ads with comprehensive callbacks.
+version: 1.0.0
+homepage: https://github.com/yourusername/native_googleads
+repository: https://github.com/yourusername/native_googleads
+issue_tracker: https://github.com/yourusername/native_googleads/issues
+documentation: https://github.com/yourusername/native_googleads#readme
+
+topics:
+  - ads
+  - admob
+  - google-ads
+  - monetization
+  - advertising
+
+environment:
+  sdk: ">=2.17.0 <4.0.0"
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  plugin_platform_interface: ^2.1.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.dvelop42.native_googleads
+        pluginClass: NativeGoogleadsPlugin
+      ios:
+        pluginClass: NativeGoogleadsPlugin
+
+platforms:
+  android:
+  ios:
+
+funding:
+  - https://github.com/sponsors/yourusername

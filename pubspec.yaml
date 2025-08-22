@@ -1,0 +1,6 @@
+name: flutter_native
+publish_to: none
+environment:
+  sdk: ^3.9.0
+workspace:
+  - packages/native_googleads
