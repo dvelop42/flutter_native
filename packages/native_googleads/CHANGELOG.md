@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2024-12-22
+
+### Added
+- Platform view factories for proper ad display
+  - Android: BannerAdPlatformView and NativeAdPlatformView
+  - Banner ads now display in native AdView containers
+  - Native ads now display in native NativeAdView containers
+- Improved error logging and debugging
+
+### Fixed
+- Banner and native ads now display properly using platform views
+- Fixed delegate retention issues in iOS
+- Corrected test ad unit IDs
+
 ## [1.1.0] - 2024-12-22
 
 ### Added

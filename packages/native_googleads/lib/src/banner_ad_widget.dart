@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../native_googleads.dart';
 
 /// A widget that displays a banner ad.
@@ -89,12 +91,38 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
         break;
     }
   }
+  
+  // Check if the selected size will fit on screen
+  BannerAdSize _getValidatedSize() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    
+    // Check if leaderboard (728px) will fit
+    if (widget.size == BannerAdSize.leaderboard && screenWidth < 728) {
+      debugPrint('Leaderboard size (728x90) too wide for screen width: $screenWidth. Using adaptive size instead.');
+      return BannerAdSize.adaptive;
+    }
+    
+    // Check if full banner (468px) will fit
+    if (widget.size == BannerAdSize.fullBanner && screenWidth < 468) {
+      debugPrint('Full banner size (468x60) too wide for screen width: $screenWidth. Using banner size instead.');
+      return BannerAdSize.banner;
+    }
+    
+    return widget.size;
+  }
 
   Future<void> _loadAd() async {
     debugPrint('BannerAdWidget: Starting to load ad');
+    // Validate size before loading
+    final validatedSize = _getValidatedSize();
+    if (validatedSize != widget.size) {
+      // Update height if size changed
+      _setAdHeight();
+    }
+    
     final bannerId = await _ads.loadBannerAd(
       adUnitId: widget.adUnitId,
-      size: widget.size,
+      size: validatedSize,
       requestConfig: widget.requestConfig,
     );
     
@@ -146,20 +174,38 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
       );
     }
 
-    // Banner ads are shown natively as overlays
-    // This widget just reserves space for them
-    return Container(
-      height: _height,
-      color: Colors.transparent,
-      child: Center(
-        child: Text(
-          _isShowing ? 'Banner Ad Space' : 'Loading Banner Ad...',
-          style: TextStyle(
-            color: Colors.grey[400],
-            fontSize: 12,
-          ),
+    final Map<String, dynamic> creationParams = {
+      'bannerId': _bannerId,
+      'adUnitId': widget.adUnitId,
+      'size': widget.size.index,
+    };
+
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return SizedBox(
+        height: _height,
+        child: AndroidView(
+          viewType: 'native_googleads/banner',
+          creationParams: creationParams,
+          creationParamsCodec: const StandardMessageCodec(),
+          onPlatformViewCreated: (int id) {
+            debugPrint('Banner platform view created with id: $id');
+          },
         ),
-      ),
-    );
+      );
+    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return SizedBox(
+        height: _height,
+        child: UiKitView(
+          viewType: 'native_googleads/banner',
+          creationParams: creationParams,
+          creationParamsCodec: const StandardMessageCodec(),
+          onPlatformViewCreated: (int id) {
+            debugPrint('Banner platform view created with id: $id');
+          },
+        ),
+      );
+    }
+    
+    return const SizedBox.shrink();
   }
 }

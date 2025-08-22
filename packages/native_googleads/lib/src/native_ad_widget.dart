@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../native_googleads.dart';
 
 /// A widget that displays a native ad.
@@ -125,42 +127,43 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
       );
     }
 
-    // Native ads need custom platform view implementation
-    // For now, we'll show a placeholder that indicates the ad space
-    return Container(
-      height: widget.height,
-      color: widget.backgroundColor ?? Colors.grey[100],
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.ad_units,
-              size: 48,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _isShowing ? 'Native Ad' : 'Loading Native Ad...',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 14,
-              ),
-            ),
-            if (_isShowing)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  'ID: ${_nativeAdId?.substring(0, 8)}...',
-                  style: TextStyle(
-                    color: Colors.grey[400],
-                    fontSize: 10,
-                  ),
-                ),
-              ),
-          ],
+    final Map<String, dynamic> creationParams = {
+      'nativeAdId': _nativeAdId,
+      'adUnitId': widget.adUnitId,
+      'height': widget.height,
+      if (widget.templateId != null) 'templateId': widget.templateId,
+      if (widget.backgroundColor != null) 
+        'backgroundColor': widget.backgroundColor!.value,
+    };
+
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return Container(
+        height: widget.height,
+        color: widget.backgroundColor,
+        child: AndroidView(
+          viewType: 'native_googleads/native',
+          creationParams: creationParams,
+          creationParamsCodec: const StandardMessageCodec(),
+          onPlatformViewCreated: (int id) {
+            debugPrint('Native ad platform view created with id: $id');
+          },
         ),
-      ),
-    );
+      );
+    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return Container(
+        height: widget.height,
+        color: widget.backgroundColor,
+        child: UiKitView(
+          viewType: 'native_googleads/native',
+          creationParams: creationParams,
+          creationParamsCodec: const StandardMessageCodec(),
+          onPlatformViewCreated: (int id) {
+            debugPrint('Native ad platform view created with id: $id');
+          },
+        ),
+      );
+    }
+    
+    return const SizedBox.shrink();
   }
 }

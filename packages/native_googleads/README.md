@@ -14,6 +14,7 @@ A Flutter plugin for integrating Google Mobile Ads (AdMob) using native platform
 - ✅ **Native Ads** - Customizable ads that match your app's design
 - ✅ **Interstitial Ads** - Full-screen ads at natural transition points
 - ✅ **Rewarded Ads** - Reward users for watching video ads
+- ✅ **Platform Views** - Native ad rendering using platform-specific views
 - ✅ **Flexible Configuration** - Pass App IDs and configurations from Dart
 - ✅ **Test Mode** - Easy switching between test and production ads
 - ✅ **Comprehensive Callbacks** - Full lifecycle event handling
@@ -441,14 +442,18 @@ AdRequestConfig({
 
 Enum for banner ad sizes:
 
-| Size | Description | Dimensions |
-|------|-------------|------------|
-| `banner` | Standard banner | 320x50 |
-| `largeBanner` | Large banner | 320x100 |
-| `mediumRectangle` | Medium rectangle | 300x250 |
-| `fullBanner` | Full banner | 468x60 |
-| `leaderboard` | Leaderboard | 728x90 |
-| `adaptive` | Adaptive banner | Width based on device |
+| Size | Description | Dimensions | Notes |
+|------|-------------|------------|-------|
+| `banner` | Standard banner | 320x50 | Works on all devices |
+| `largeBanner` | Large banner | 320x100 | Works on all devices |
+| `mediumRectangle` | Medium rectangle | 300x250 | Works on most devices |
+| `fullBanner` | Full banner | 468x60 | Requires tablet or landscape |
+| `leaderboard` | Leaderboard | 728x90 | Requires tablet or large screen |
+| `adaptive` | Adaptive banner | Width based on device | Recommended for best fit |
+
+**Note**: The widget automatically validates banner sizes and will use a smaller size if the requested size doesn't fit the screen width. For example:
+- Leaderboard (728px) on phones → uses Adaptive size
+- Full Banner (468px) on small phones → uses Banner size
 
 ## Testing
 

@@ -16,6 +16,13 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
         let instance = NativeGoogleadsPlugin()
         instance.channel = channel
         registrar.addMethodCallDelegate(instance, channel: channel)
+        
+        // Register platform view factories
+        let bannerFactory = BannerAdPlatformViewFactory(plugin: instance)
+        registrar.register(bannerFactory, withId: "native_googleads/banner")
+        
+        let nativeFactory = NativeAdPlatformViewFactory(plugin: instance)
+        registrar.register(nativeFactory, withId: "native_googleads/native")
     }
     
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -498,5 +505,14 @@ extension NativeGoogleadsPlugin: GADFullScreenContentDelegate {
         
         nativeAds.removeValue(forKey: nativeAdId)
         result(true)
+    }
+    
+    // Helper methods for platform views
+    func getBannerView(for bannerId: String) -> GADBannerView? {
+        return bannerAds[bannerId]
+    }
+    
+    func getNativeAd(for nativeAdId: String) -> GADNativeAd? {
+        return nativeAds[nativeAdId]
     }
 }

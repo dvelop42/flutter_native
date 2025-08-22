@@ -25,6 +25,9 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import io.flutter.plugin.common.StandardMessageCodec
+import io.flutter.plugin.platform.PlatformView
+import io.flutter.plugin.platform.PlatformViewFactory
 import android.app.Activity
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -47,6 +50,17 @@ class NativeGoogleadsPlugin :
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, "native_googleads")
         channel.setMethodCallHandler(this)
         context = flutterPluginBinding.applicationContext
+        
+        // Register platform view factories
+        flutterPluginBinding.platformViewRegistry.registerViewFactory(
+            "native_googleads/banner",
+            BannerAdViewFactory(bannerAds)
+        )
+        
+        flutterPluginBinding.platformViewRegistry.registerViewFactory(
+            "native_googleads/native",
+            NativeAdViewFactory(nativeAds)
+        )
     }
 
     override fun onMethodCall(
@@ -440,6 +454,26 @@ class NativeGoogleadsPlugin :
             result.success(true)
         } else {
             result.error("NATIVE_AD_NOT_FOUND", "Native ad with ID $nativeAdId not found", null)
+        }
+    }
+    
+    // Platform View Factory for Banner Ads
+    inner class BannerAdViewFactory(
+        private val bannerAds: Map<String, AdView>
+    ) : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
+        override fun create(context: Context, viewId: Int, args: Any?): PlatformView {
+            val creationParams = args as? Map<String?, Any?>
+            return BannerAdPlatformView(context, bannerAds, creationParams)
+        }
+    }
+    
+    // Platform View Factory for Native Ads
+    inner class NativeAdViewFactory(
+        private val nativeAds: Map<String, NativeAd>
+    ) : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
+        override fun create(context: Context, viewId: Int, args: Any?): PlatformView {
+            val creationParams = args as? Map<String?, Any?>
+            return NativeAdPlatformView(context, nativeAds, creationParams)
         }
     }
 }

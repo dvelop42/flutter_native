@@ -167,6 +167,27 @@ class _BannerAdPageState extends State<BannerAdPage> {
                       ),
                   ],
                 ),
+                if (_selectedSize == BannerAdSize.leaderboard && MediaQuery.of(context).size.width < 728)
+                  Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[50],
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.warning, size: 16, color: Colors.orange[700]),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Leaderboard is too wide for this screen. Will use adaptive size instead.',
+                            style: TextStyle(fontSize: 12, color: Colors.orange[900]),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 const SizedBox(height: 16),
                 Center(
                   child: ElevatedButton(
@@ -239,6 +260,7 @@ class _BannerAdPageState extends State<BannerAdPage> {
   }
 
   String _getSizeName(BannerAdSize size) {
+    final screenWidth = MediaQuery.of(context).size.width;
     switch (size) {
       case BannerAdSize.banner:
         return 'Banner (320x50)';
@@ -247,9 +269,9 @@ class _BannerAdPageState extends State<BannerAdPage> {
       case BannerAdSize.mediumRectangle:
         return 'Medium (300x250)';
       case BannerAdSize.fullBanner:
-        return 'Full (468x60)';
+        return screenWidth < 468 ? 'Full (468x60) ⚠️' : 'Full (468x60)';
       case BannerAdSize.leaderboard:
-        return 'Leaderboard (728x90)';
+        return screenWidth < 728 ? 'Leaderboard (728x90) ⚠️' : 'Leaderboard (728x90)';
       case BannerAdSize.adaptive:
         return 'Adaptive';
     }
