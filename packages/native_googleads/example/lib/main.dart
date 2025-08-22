@@ -122,7 +122,7 @@ class _BannerAdPageState extends State<BannerAdPage> {
     final appId = Platform.isAndroid
         ? AdTestIds.androidAppId
         : AdTestIds.iosAppId;
-    
+
     await NativeGoogleads.instance.initialize(appId: appId);
   }
 
@@ -167,7 +167,8 @@ class _BannerAdPageState extends State<BannerAdPage> {
                       ),
                   ],
                 ),
-                if (_selectedSize == BannerAdSize.leaderboard && MediaQuery.of(context).size.width < 728)
+                if (_selectedSize == BannerAdSize.leaderboard &&
+                    MediaQuery.of(context).size.width < 728)
                   Container(
                     margin: const EdgeInsets.only(top: 8),
                     padding: const EdgeInsets.all(8),
@@ -177,12 +178,19 @@ class _BannerAdPageState extends State<BannerAdPage> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.warning, size: 16, color: Colors.orange[700]),
+                        Icon(
+                          Icons.warning,
+                          size: 16,
+                          color: Colors.orange[700],
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             'Leaderboard is too wide for this screen. Will use adaptive size instead.',
-                            style: TextStyle(fontSize: 12, color: Colors.orange[900]),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.orange[900],
+                            ),
                           ),
                         ),
                       ],
@@ -211,12 +219,19 @@ class _BannerAdPageState extends State<BannerAdPage> {
                   margin: const EdgeInsets.symmetric(horizontal: 16.0),
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline, color: Colors.amber[700], size: 16),
+                      Icon(
+                        Icons.info_outline,
+                        color: Colors.amber[700],
+                        size: 16,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Note: Banner loads successfully but displays as placeholder',
-                          style: TextStyle(fontSize: 12, color: Colors.amber[900]),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.amber[900],
+                          ),
                         ),
                       ),
                     ],
@@ -271,7 +286,9 @@ class _BannerAdPageState extends State<BannerAdPage> {
       case BannerAdSize.fullBanner:
         return screenWidth < 468 ? 'Full (468x60) ⚠️' : 'Full (468x60)';
       case BannerAdSize.leaderboard:
-        return screenWidth < 728 ? 'Leaderboard (728x90) ⚠️' : 'Leaderboard (728x90)';
+        return screenWidth < 728
+            ? 'Leaderboard (728x90) ⚠️'
+            : 'Leaderboard (728x90)';
       case BannerAdSize.adaptive:
         return 'Adaptive';
     }
@@ -297,7 +314,7 @@ class _NativeAdPageState extends State<NativeAdPage> {
     final appId = Platform.isAndroid
         ? AdTestIds.androidAppId
         : AdTestIds.iosAppId;
-    
+
     await NativeGoogleads.instance.initialize(appId: appId);
   }
 
@@ -315,10 +332,9 @@ class _NativeAdPageState extends State<NativeAdPage> {
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0),
         child: ListView.separated(
-          itemCount: 12, // 총 아이템 수
+          itemCount: 12,
           separatorBuilder: (context, index) => const SizedBox(height: 16),
           itemBuilder: (context, index) {
-            // 인덱스 5에 광고 표시
             if (index == 5) {
               return Card(
                 elevation: 4,
@@ -356,8 +372,8 @@ class _NativeAdPageState extends State<NativeAdPage> {
                 ),
               );
             }
-            
-            // 일반 콘텐츠 표시
+
+            // Normal Contents
             return Card(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -365,12 +381,15 @@ class _NativeAdPageState extends State<NativeAdPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '콘텐츠 아이템 ${index + 1}',
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      'Contents Item ${index + 1}',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '여기에 콘텐츠 내용이 표시됩니다. 이 부분은 실제 앱 콘텐츠로 대체될 수 있습니다.',
+                      'This is where the content for item ${index + 1} will be displayed.',
                       style: const TextStyle(fontSize: 14),
                     ),
                   ],
@@ -415,6 +434,20 @@ class _InterstitialAdPageState extends State<InterstitialAdPage> {
             _isAdReady = false;
             _status = 'Ad dismissed';
           });
+          // Auto-preload runs natively; refresh readiness shortly after
+          Future<void>(() async {
+            await Future.delayed(const Duration(milliseconds: 200));
+            if (_interstitialAdUnitId != null) {
+              final ready = await _ads.isInterstitialReady(
+                _interstitialAdUnitId!,
+              );
+              if (!mounted) return;
+              setState(() {
+                _isAdReady = ready;
+                if (ready) _status = 'Ready';
+              });
+            }
+          });
         }
       },
       onAdShowed: (adType) {
@@ -430,6 +463,20 @@ class _InterstitialAdPageState extends State<InterstitialAdPage> {
             _status = 'Failed to show: $error';
           });
           _showSnackBar('Failed to show ad: $error');
+          // Try to reflect auto-preload status
+          Future<void>(() async {
+            await Future.delayed(const Duration(milliseconds: 200));
+            if (_interstitialAdUnitId != null) {
+              final ready = await _ads.isInterstitialReady(
+                _interstitialAdUnitId!,
+              );
+              if (!mounted) return;
+              setState(() {
+                _isAdReady = ready;
+                if (ready) _status = 'Ready';
+              });
+            }
+          });
         }
       },
     );
@@ -437,9 +484,9 @@ class _InterstitialAdPageState extends State<InterstitialAdPage> {
     final appId = Platform.isAndroid
         ? AdTestIds.androidAppId
         : AdTestIds.iosAppId;
-    
+
     final result = await _ads.initialize(appId: appId);
-    
+
     if (result != null && result['isReady'] == true) {
       setState(() {
         _status = 'Initialized';
@@ -451,6 +498,8 @@ class _InterstitialAdPageState extends State<InterstitialAdPage> {
     }
   }
 
+  String? _interstitialAdUnitId;
+
   Future<void> _loadInterstitialAd() async {
     setState(() {
       _status = 'Loading ad...';
@@ -460,13 +509,14 @@ class _InterstitialAdPageState extends State<InterstitialAdPage> {
         ? AdTestIds.androidInterstitial
         : AdTestIds.iosInterstitial;
 
-    final success = await _ads.loadInterstitialAd(adUnitId: adUnitId);
-    
+    _interstitialAdUnitId = adUnitId;
+    final success = await _ads.preloadInterstitialAd(adUnitId: adUnitId);
+
     setState(() {
       _isAdReady = success;
       _status = success ? 'Ad loaded' : 'Failed to load ad';
     });
-    
+
     if (!success) {
       _showSnackBar('Failed to load interstitial ad');
     }
@@ -478,16 +528,18 @@ class _InterstitialAdPageState extends State<InterstitialAdPage> {
       return;
     }
 
-    final success = await _ads.showInterstitialAd();
+    final success = await _ads.showInterstitialAd(
+      adUnitId: _interstitialAdUnitId!,
+    );
     if (!success) {
       _showSnackBar('Failed to show interstitial ad');
     }
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -516,7 +568,10 @@ class _InterstitialAdPageState extends State<InterstitialAdPage> {
                       const SizedBox(height: 16),
                       const Text(
                         'Interstitial Ad',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -525,7 +580,10 @@ class _InterstitialAdPageState extends State<InterstitialAdPage> {
                       ),
                       const SizedBox(height: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: _isAdReady ? Colors.green : Colors.red,
                           borderRadius: BorderRadius.circular(12),
@@ -595,6 +653,18 @@ class _RewardedAdPageState extends State<RewardedAdPage> {
             _isAdReady = false;
             _status = 'Ad dismissed';
           });
+          // Auto-preload runs natively; refresh readiness shortly after
+          Future<void>(() async {
+            await Future.delayed(const Duration(milliseconds: 200));
+            if (_rewardedAdUnitId != null) {
+              final ready = await _ads.isRewardedReady(_rewardedAdUnitId!);
+              if (!mounted) return;
+              setState(() {
+                _isAdReady = ready;
+                if (ready) _status = 'Ready';
+              });
+            }
+          });
         }
       },
       onAdShowed: (adType) {
@@ -610,6 +680,18 @@ class _RewardedAdPageState extends State<RewardedAdPage> {
             _status = 'Failed to show: $error';
           });
           _showSnackBar('Failed to show ad: $error');
+          // Try to reflect auto-preload status
+          Future<void>(() async {
+            await Future.delayed(const Duration(milliseconds: 200));
+            if (_rewardedAdUnitId != null) {
+              final ready = await _ads.isRewardedReady(_rewardedAdUnitId!);
+              if (!mounted) return;
+              setState(() {
+                _isAdReady = ready;
+                if (ready) _status = 'Ready';
+              });
+            }
+          });
         }
       },
       onUserEarnedReward: (type, amount) {
@@ -624,9 +706,9 @@ class _RewardedAdPageState extends State<RewardedAdPage> {
     final appId = Platform.isAndroid
         ? AdTestIds.androidAppId
         : AdTestIds.iosAppId;
-    
+
     final result = await _ads.initialize(appId: appId);
-    
+
     if (result != null && result['isReady'] == true) {
       setState(() {
         _status = 'Initialized';
@@ -638,6 +720,8 @@ class _RewardedAdPageState extends State<RewardedAdPage> {
     }
   }
 
+  String? _rewardedAdUnitId;
+
   Future<void> _loadRewardedAd() async {
     setState(() {
       _status = 'Loading ad...';
@@ -647,13 +731,14 @@ class _RewardedAdPageState extends State<RewardedAdPage> {
         ? AdTestIds.androidRewarded
         : AdTestIds.iosRewarded;
 
-    final success = await _ads.loadRewardedAd(adUnitId: adUnitId);
-    
+    _rewardedAdUnitId = adUnitId;
+    final success = await _ads.preloadRewardedAd(adUnitId: adUnitId);
+
     setState(() {
       _isAdReady = success;
       _status = success ? 'Ad loaded' : 'Failed to load ad';
     });
-    
+
     if (!success) {
       _showSnackBar('Failed to load rewarded ad');
     }
@@ -665,16 +750,16 @@ class _RewardedAdPageState extends State<RewardedAdPage> {
       return;
     }
 
-    final success = await _ads.showRewardedAd();
+    final success = await _ads.showRewardedAd(adUnitId: _rewardedAdUnitId!);
     if (!success) {
       _showSnackBar('Failed to show rewarded ad');
     }
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -703,12 +788,18 @@ class _RewardedAdPageState extends State<RewardedAdPage> {
                       const SizedBox(height: 16),
                       const Text(
                         'Rewarded Ad',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         'Total Rewards: $_rewardAmount',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -717,7 +808,10 @@ class _RewardedAdPageState extends State<RewardedAdPage> {
                       ),
                       const SizedBox(height: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: _isAdReady ? Colors.green : Colors.red,
                           borderRadius: BorderRadius.circular(12),

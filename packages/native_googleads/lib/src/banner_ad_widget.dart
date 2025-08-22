@@ -4,9 +4,9 @@ import 'package:flutter/services.dart';
 import '../native_googleads.dart';
 
 /// A widget that displays a banner ad.
-/// 
+///
 /// This widget creates a platform view to display native banner ads.
-/// 
+///
 /// Example:
 /// ```dart
 /// BannerAdWidget(
@@ -19,25 +19,25 @@ import '../native_googleads.dart';
 class BannerAdWidget extends StatefulWidget {
   /// The ad unit ID for the banner ad.
   final String adUnitId;
-  
+
   /// The size of the banner ad.
   final BannerAdSize size;
-  
+
   /// Optional request configuration.
   final AdRequestConfig? requestConfig;
-  
+
   /// Called when the ad loads successfully.
   final VoidCallback? onAdLoaded;
-  
+
   /// Called when the ad fails to load.
   final Function(String error)? onAdFailedToLoad;
-  
+
   /// Called when the ad is clicked.
   final VoidCallback? onAdClicked;
-  
+
   /// Called when the ad impression is recorded.
   final VoidCallback? onAdImpression;
-  
+
   const BannerAdWidget({
     super.key,
     required this.adUnitId,
@@ -63,10 +63,11 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
   @override
   void initState() {
     super.initState();
-    debugPrint('BannerAdWidget: initState called for adUnitId: ${widget.adUnitId}');
+    debugPrint(
+        'BannerAdWidget: initState called for adUnitId: ${widget.adUnitId}');
     _setAdHeight();
   }
-  
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -99,23 +100,25 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
         break;
     }
   }
-  
+
   // Check if the selected size will fit on screen
   BannerAdSize _getValidatedSize() {
     final screenWidth = MediaQuery.of(context).size.width;
-    
+
     // Check if leaderboard (728px) will fit
     if (widget.size == BannerAdSize.leaderboard && screenWidth < 728) {
-      debugPrint('Leaderboard size (728x90) too wide for screen width: $screenWidth. Using adaptive size instead.');
+      debugPrint(
+          'Leaderboard size (728x90) too wide for screen width: $screenWidth. Using adaptive size instead.');
       return BannerAdSize.adaptive;
     }
-    
+
     // Check if full banner (468px) will fit
     if (widget.size == BannerAdSize.fullBanner && screenWidth < 468) {
-      debugPrint('Full banner size (468x60) too wide for screen width: $screenWidth. Using banner size instead.');
+      debugPrint(
+          'Full banner size (468x60) too wide for screen width: $screenWidth. Using banner size instead.');
       return BannerAdSize.banner;
     }
-    
+
     return widget.size;
   }
 
@@ -127,13 +130,13 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
       // Update height if size changed
       _setAdHeight();
     }
-    
+
     final bannerId = await _ads.loadBannerAd(
       adUnitId: widget.adUnitId,
       size: validatedSize,
       requestConfig: widget.requestConfig,
     );
-    
+
     if (bannerId != null && mounted) {
       debugPrint('BannerAdWidget: Ad loaded successfully with ID: $bannerId');
       setState(() {
@@ -148,7 +151,7 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
       widget.onAdFailedToLoad?.call('Failed to load banner ad');
     }
   }
-  
+
   Future<void> _showAd() async {
     if (_bannerId != null && !_isShowing) {
       final success = await _ads.showBannerAd(_bannerId!);
@@ -213,7 +216,7 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
         ),
       );
     }
-    
+
     return const SizedBox.shrink();
   }
 }

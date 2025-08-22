@@ -105,14 +105,14 @@ final adUnitId = Platform.isAndroid
     ? AdTestIds.androidInterstitial
     : AdTestIds.iosInterstitial;
 
-await _ads.loadInterstitialAd(adUnitId: adUnitId);
+await _ads.preloadInterstitialAd(adUnitId: adUnitId);
 
 // Load rewarded ad
 final rewardedAdUnitId = Platform.isAndroid
     ? AdTestIds.androidRewarded
     : AdTestIds.iosRewarded;
 
-await _ads.loadRewardedAd(adUnitId: rewardedAdUnitId);
+await _ads.preloadRewardedAd(adUnitId: rewardedAdUnitId);
 ```
 
 #### Setting Up Callbacks
@@ -134,6 +134,40 @@ _ads.setAdCallbacks(
     // Grant reward to user
   },
 );
+
+### Preload → Check → Show (with auto-preload)
+
+```dart
+late final String interstitialId;
+
+Future<void> initAds() async {
+  await _ads.initializeWithConfig(AdConfig.test());
+  interstitialId = Platform.isAndroid
+      ? AdTestIds.androidInterstitial
+      : AdTestIds.iosInterstitial;
+  await _ads.preloadInterstitialAd(adUnitId: interstitialId);
+
+  _ads.setAdCallbacks(
+    onAdDismissed: (type) async {
+      if (type == 'interstitial') {
+        // Native layer auto-preloads the next ad for this ID.
+        await Future.delayed(const Duration(milliseconds: 200));
+        final ready = await _ads.isInterstitialReady(interstitialId);
+        // update UI state based on `ready`
+      }
+    },
+  );
+}
+
+Future<void> onPlayPressed() async {
+  final ready = await _ads.isInterstitialReady(interstitialId);
+  if (!ready) {
+    await _ads.preloadInterstitialAd(adUnitId: interstitialId);
+    return; // Show later when ready
+  }
+  await _ads.showInterstitialAd(adUnitId: interstitialId);
+}
+```
 ```
 
 ## Test Ad Unit IDs
@@ -195,7 +229,7 @@ To use in production:
 
 - [AdMob Documentation](https://developers.google.com/admob)
 - [Flutter Documentation](https://flutter.dev/docs)
-- [Plugin Documentation](https://github.com/yourusername/native_googleads)
+- [Plugin Documentation](https://github.com/dvelop42/flutter_native/tree/main/packages/native_googleads)
 
 ## License
 

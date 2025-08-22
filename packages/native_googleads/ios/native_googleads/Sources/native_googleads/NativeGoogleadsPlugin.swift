@@ -4,8 +4,10 @@ import GoogleMobileAds
 
 public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
     private var channel: FlutterMethodChannel?
-    private var interstitialAd: GADInterstitialAd?
-    private var rewardedAd: GADRewardedAd?
+    private var interstitialAds: [String: GADInterstitialAd] = [:]
+    private var rewardedAds: [String: GADRewardedAd] = [:]
+    private var interstitialToId: [ObjectIdentifier: String] = [:]
+    private var rewardedToId: [ObjectIdentifier: String] = [:]
     private var bannerAds: [String: GADBannerView] = [:]
     private var nativeAds: [String: GADNativeAd] = [:]
     private var adLoaders: [String: GADAdLoader] = [:]
@@ -41,10 +43,20 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
             }
             initializeAdMob(appId: appId, result: result)
             
-        case "loadInterstitialAd":
+        case "preloadInterstitialAd", "loadInterstitialAd":
             if let args = call.arguments as? [String: Any],
                let adUnitId = args["adUnitId"] as? String {
-                loadInterstitialAd(adUnitId: adUnitId, result: result)
+                preloadInterstitialAd(adUnitId: adUnitId, result: result)
+            } else {
+                result(FlutterError(code: "INVALID_ARGUMENT",
+                                    message: "Ad unit ID is required",
+                                    details: nil))
+            }
+            
+        case "isInterstitialReady":
+            if let args = call.arguments as? [String: Any],
+               let adUnitId = args["adUnitId"] as? String {
+                result(interstitialAds[adUnitId] != nil)
             } else {
                 result(FlutterError(code: "INVALID_ARGUMENT",
                                     message: "Ad unit ID is required",
@@ -52,12 +64,29 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
             }
             
         case "showInterstitialAd":
-            showInterstitialAd(result: result)
-            
-        case "loadRewardedAd":
             if let args = call.arguments as? [String: Any],
                let adUnitId = args["adUnitId"] as? String {
-                loadRewardedAd(adUnitId: adUnitId, result: result)
+                showInterstitialAd(adUnitId: adUnitId, result: result)
+            } else {
+                result(FlutterError(code: "INVALID_ARGUMENT",
+                                    message: "Ad unit ID is required",
+                                    details: nil))
+            }
+            
+        case "preloadRewardedAd", "loadRewardedAd":
+            if let args = call.arguments as? [String: Any],
+               let adUnitId = args["adUnitId"] as? String {
+                preloadRewardedAd(adUnitId: adUnitId, result: result)
+            } else {
+                result(FlutterError(code: "INVALID_ARGUMENT",
+                                    message: "Ad unit ID is required",
+                                    details: nil))
+            }
+            
+        case "isRewardedReady":
+            if let args = call.arguments as? [String: Any],
+               let adUnitId = args["adUnitId"] as? String {
+                result(rewardedAds[adUnitId] != nil)
             } else {
                 result(FlutterError(code: "INVALID_ARGUMENT",
                                     message: "Ad unit ID is required",
@@ -65,7 +94,14 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
             }
             
         case "showRewardedAd":
-            showRewardedAd(result: result)
+            if let args = call.arguments as? [String: Any],
+               let adUnitId = args["adUnitId"] as? String {
+                showRewardedAd(adUnitId: adUnitId, result: result)
+            } else {
+                result(FlutterError(code: "INVALID_ARGUMENT",
+                                    message: "Ad unit ID is required",
+                                    details: nil))
+            }
             
         case "loadBannerAd":
             if let args = call.arguments as? [String: Any],
@@ -166,13 +202,13 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
         }
     }
     
-    private func loadInterstitialAd(adUnitId: String, result: @escaping FlutterResult) {
+    private func preloadInterstitialAd(adUnitId: String, result: @escaping FlutterResult) {
         let request = GADRequest()
         
         GADInterstitialAd.load(withAdUnitID: adUnitId,
                                request: request) { [weak self] ad, error in
             if let error = error {
-                self?.interstitialAd = nil
+                self?.interstitialAds.removeValue(forKey: adUnitId)
                 let nsError = error as NSError
                 result(FlutterError(code: "AD_LOAD_ERROR",
                                     message: error.localizedDescription,
@@ -180,18 +216,21 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
                 return
             }
             
-            self?.interstitialAd = ad
-            self?.setupInterstitialCallbacks()
+            if let ad = ad {
+                self?.interstitialAds[adUnitId] = ad
+                self?.interstitialToId[ObjectIdentifier(ad)] = adUnitId
+            }
+            self?.setupInterstitialCallbacks(adUnitId: adUnitId)
             result(true)
         }
     }
     
-    private func setupInterstitialCallbacks() {
-        interstitialAd?.fullScreenContentDelegate = self
+    private func setupInterstitialCallbacks(adUnitId: String) {
+        interstitialAds[adUnitId]?.fullScreenContentDelegate = self
     }
     
-    private func showInterstitialAd(result: @escaping FlutterResult) {
-        guard let ad = interstitialAd else {
+    private func showInterstitialAd(adUnitId: String, result: @escaping FlutterResult) {
+        guard let ad = interstitialAds[adUnitId] else {
             result(FlutterError(code: "AD_NOT_READY",
                                 message: "Interstitial ad is not loaded",
                                 details: nil))
@@ -208,13 +247,13 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
         }
     }
     
-    private func loadRewardedAd(adUnitId: String, result: @escaping FlutterResult) {
+    private func preloadRewardedAd(adUnitId: String, result: @escaping FlutterResult) {
         let request = GADRequest()
         
         GADRewardedAd.load(withAdUnitID: adUnitId,
                            request: request) { [weak self] ad, error in
             if let error = error {
-                self?.rewardedAd = nil
+                self?.rewardedAds.removeValue(forKey: adUnitId)
                 let nsError = error as NSError
                 result(FlutterError(code: "AD_LOAD_ERROR",
                                     message: error.localizedDescription,
@@ -222,18 +261,21 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
                 return
             }
             
-            self?.rewardedAd = ad
-            self?.setupRewardedCallbacks()
+            if let ad = ad {
+                self?.rewardedAds[adUnitId] = ad
+                self?.rewardedToId[ObjectIdentifier(ad)] = adUnitId
+            }
+            self?.setupRewardedCallbacks(adUnitId: adUnitId)
             result(true)
         }
     }
     
-    private func setupRewardedCallbacks() {
-        rewardedAd?.fullScreenContentDelegate = self
+    private func setupRewardedCallbacks(adUnitId: String) {
+        rewardedAds[adUnitId]?.fullScreenContentDelegate = self
     }
     
-    private func showRewardedAd(result: @escaping FlutterResult) {
-        guard let ad = rewardedAd else {
+    private func showRewardedAd(adUnitId: String, result: @escaping FlutterResult) {
+        guard let ad = rewardedAds[adUnitId] else {
             result(FlutterError(code: "AD_NOT_READY",
                                 message: "Rewarded ad is not loaded",
                                 details: nil))
@@ -486,11 +528,20 @@ extension NativeGoogleadsPlugin: GADFullScreenContentDelegate {
     
     public func adDidDismissFullScreenContent(_ ad: GADFullScreenPresentingAd) {
         let type = ad is GADInterstitialAd ? "interstitial" : "rewarded"
-        
-        if ad is GADInterstitialAd {
-            interstitialAd = nil
-        } else if ad is GADRewardedAd {
-            rewardedAd = nil
+        if let interstitial = ad as? GADInterstitialAd {
+            if let adUnitId = interstitialToId[ObjectIdentifier(interstitial)] {
+                interstitialAds.removeValue(forKey: adUnitId)
+                interstitialToId.removeValue(forKey: ObjectIdentifier(interstitial))
+                // Auto-preload next
+                preloadInterstitialAd(adUnitId: adUnitId) { _ in }
+            }
+        } else if let rewarded = ad as? GADRewardedAd {
+            if let adUnitId = rewardedToId[ObjectIdentifier(rewarded)] {
+                rewardedAds.removeValue(forKey: adUnitId)
+                rewardedToId.removeValue(forKey: ObjectIdentifier(rewarded))
+                // Auto-preload next
+                preloadRewardedAd(adUnitId: adUnitId) { _ in }
+            }
         }
         
         channel?.invokeMethod("onAdDismissed", arguments: ["type": type])
@@ -498,11 +549,18 @@ extension NativeGoogleadsPlugin: GADFullScreenContentDelegate {
     
     public func ad(_ ad: GADFullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: Error) {
         let type = ad is GADInterstitialAd ? "interstitial" : "rewarded"
-        
-        if ad is GADInterstitialAd {
-            interstitialAd = nil
-        } else if ad is GADRewardedAd {
-            rewardedAd = nil
+        if let interstitial = ad as? GADInterstitialAd {
+            if let adUnitId = interstitialToId[ObjectIdentifier(interstitial)] {
+                interstitialAds.removeValue(forKey: adUnitId)
+                interstitialToId.removeValue(forKey: ObjectIdentifier(interstitial))
+                preloadInterstitialAd(adUnitId: adUnitId) { _ in }
+            }
+        } else if let rewarded = ad as? GADRewardedAd {
+            if let adUnitId = rewardedToId[ObjectIdentifier(rewarded)] {
+                rewardedAds.removeValue(forKey: adUnitId)
+                rewardedToId.removeValue(forKey: ObjectIdentifier(rewarded))
+                preloadRewardedAd(adUnitId: adUnitId) { _ in }
+            }
         }
         
         channel?.invokeMethod("onAdFailedToShow", arguments: [

@@ -4,9 +4,9 @@ import 'package:flutter/services.dart';
 import '../native_googleads.dart';
 
 /// A widget that displays a native ad.
-/// 
+///
 /// Native ads are customizable ads that match the look and feel of your app.
-/// 
+///
 /// Example:
 /// ```dart
 /// NativeAdWidget(
@@ -19,31 +19,31 @@ import '../native_googleads.dart';
 class NativeAdWidget extends StatefulWidget {
   /// The ad unit ID for the native ad.
   final String adUnitId;
-  
+
   /// The height of the native ad container.
   final double height;
-  
+
   /// Optional request configuration.
   final AdRequestConfig? requestConfig;
-  
+
   /// Called when the ad loads successfully.
   final VoidCallback? onAdLoaded;
-  
+
   /// Called when the ad fails to load.
   final Function(String error)? onAdFailedToLoad;
-  
+
   /// Called when the ad is clicked.
   final VoidCallback? onAdClicked;
-  
+
   /// Called when the ad impression is recorded.
   final VoidCallback? onAdImpression;
-  
+
   /// Background color for the ad container.
   final Color? backgroundColor;
-  
+
   /// Custom template ID for native ads (optional).
   final String? templateId;
-  
+
   const NativeAdWidget({
     super.key,
     required this.adUnitId,
@@ -70,7 +70,8 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
   @override
   void initState() {
     super.initState();
-    debugPrint('NativeAdWidget: initState called for adUnitId: ${widget.adUnitId}');
+    debugPrint(
+        'NativeAdWidget: initState called for adUnitId: ${widget.adUnitId}');
     _loadAd();
   }
 
@@ -80,7 +81,7 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
       adUnitId: widget.adUnitId,
       requestConfig: widget.requestConfig,
     );
-    
+
     if (nativeAdId != null && mounted) {
       debugPrint('NativeAdWidget: Ad loaded successfully with ID: $nativeAdId');
       setState(() {
@@ -95,7 +96,7 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
       widget.onAdFailedToLoad?.call('Failed to load native ad');
     }
   }
-  
+
   Future<void> _showAd() async {
     if (_nativeAdId != null && !_isShowing) {
       final success = await _ads.showNativeAd(_nativeAdId!);
@@ -132,7 +133,7 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
       'adUnitId': widget.adUnitId,
       'height': widget.height,
       if (widget.templateId != null) 'templateId': widget.templateId,
-      if (widget.backgroundColor != null) 
+      if (widget.backgroundColor != null)
         'backgroundColor': widget.backgroundColor!.toARGB32(),
     };
 
@@ -163,7 +164,7 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
         ),
       );
     }
-    
+
     return const SizedBox.shrink();
   }
 }

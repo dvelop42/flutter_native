@@ -41,8 +41,8 @@ class NativeGoogleadsPlugin :
     private lateinit var channel: MethodChannel
     private lateinit var context: Context
     private var activity: Activity? = null
-    private var interstitialAd: InterstitialAd? = null
-    private var rewardedAd: RewardedAd? = null
+    private val interstitialAds = mutableMapOf<String, InterstitialAd>()
+    private val rewardedAds = mutableMapOf<String, RewardedAd>()
     private val bannerAds = mutableMapOf<String, AdView>()
     private val nativeAds = mutableMapOf<String, NativeAd>()
 
@@ -75,27 +75,53 @@ class NativeGoogleadsPlugin :
                 val appId = call.argument<String>("appId")
                 initializeAdMob(appId, result)
             }
-            "loadInterstitialAd" -> {
+            "preloadInterstitialAd", "loadInterstitialAd" -> {
                 val adUnitId = call.argument<String>("adUnitId")
                 if (adUnitId != null) {
-                    loadInterstitialAd(adUnitId, result)
+                    preloadInterstitialAd(adUnitId, result)
+                } else {
+                    result.error("INVALID_ARGUMENT", "Ad unit ID is required", null)
+                }
+            }
+            "isInterstitialReady" -> {
+                val adUnitId = call.argument<String>("adUnitId")
+                if (adUnitId != null) {
+                    result.success(interstitialAds.containsKey(adUnitId))
                 } else {
                     result.error("INVALID_ARGUMENT", "Ad unit ID is required", null)
                 }
             }
             "showInterstitialAd" -> {
-                showInterstitialAd(result)
-            }
-            "loadRewardedAd" -> {
                 val adUnitId = call.argument<String>("adUnitId")
                 if (adUnitId != null) {
-                    loadRewardedAd(adUnitId, result)
+                    showInterstitialAd(adUnitId, result)
+                } else {
+                    result.error("INVALID_ARGUMENT", "Ad unit ID is required", null)
+                }
+            }
+            "preloadRewardedAd", "loadRewardedAd" -> {
+                val adUnitId = call.argument<String>("adUnitId")
+                if (adUnitId != null) {
+                    preloadRewardedAd(adUnitId, result)
+                } else {
+                    result.error("INVALID_ARGUMENT", "Ad unit ID is required", null)
+                }
+            }
+            "isRewardedReady" -> {
+                val adUnitId = call.argument<String>("adUnitId")
+                if (adUnitId != null) {
+                    result.success(rewardedAds.containsKey(adUnitId))
                 } else {
                     result.error("INVALID_ARGUMENT", "Ad unit ID is required", null)
                 }
             }
             "showRewardedAd" -> {
-                showRewardedAd(result)
+                val adUnitId = call.argument<String>("adUnitId")
+                if (adUnitId != null) {
+                    showRewardedAd(adUnitId, result)
+                } else {
+                    result.error("INVALID_ARGUMENT", "Ad unit ID is required", null)
+                }
             }
             "loadBannerAd" -> {
                 val adUnitId = call.argument<String>("adUnitId")
@@ -186,7 +212,7 @@ class NativeGoogleadsPlugin :
         }
     }
 
-    private fun loadInterstitialAd(adUnitId: String, result: Result) {
+    private fun preloadInterstitialAd(adUnitId: String, result: Result) {
         val adRequest = AdRequest.Builder().build()
 
         InterstitialAd.load(
@@ -195,32 +221,44 @@ class NativeGoogleadsPlugin :
             adRequest,
             object : InterstitialAdLoadCallback() {
                 override fun onAdFailedToLoad(adError: LoadAdError) {
-                    interstitialAd = null
+                    interstitialAds.remove(adUnitId)
                     result.error("AD_LOAD_ERROR", adError.message, adError.code)
                 }
 
                 override fun onAdLoaded(ad: InterstitialAd) {
-                    interstitialAd = ad
-                    setupInterstitialCallbacks()
+                    interstitialAds[adUnitId] = ad
+                    setupInterstitialCallbacks(adUnitId)
                     result.success(true)
                 }
             }
         )
     }
 
-    private fun setupInterstitialCallbacks() {
-        interstitialAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
+    private fun setupInterstitialCallbacks(adUnitId: String) {
+        interstitialAds[adUnitId]?.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdDismissedFullScreenContent() {
-                interstitialAd = null
+                interstitialAds.remove(adUnitId)
                 channel.invokeMethod("onAdDismissed", mapOf("type" to "interstitial"))
+                // Auto-preload next
+                preloadInterstitialAd(adUnitId, object : Result {
+                    override fun success(result: Any?) {}
+                    override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {}
+                    override fun notImplemented() {}
+                })
             }
 
             override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                interstitialAd = null
+                interstitialAds.remove(adUnitId)
                 channel.invokeMethod("onAdFailedToShow", mapOf(
                     "type" to "interstitial",
                     "error" to adError.message
                 ))
+                // Try to keep warm by preloading again (no backoff for simplicity)
+                preloadInterstitialAd(adUnitId, object : Result {
+                    override fun success(result: Any?) {}
+                    override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {}
+                    override fun notImplemented() {}
+                })
             }
 
             override fun onAdShowedFullScreenContent() {
@@ -229,8 +267,8 @@ class NativeGoogleadsPlugin :
         }
     }
 
-    private fun showInterstitialAd(result: Result) {
-        val ad = interstitialAd
+    private fun showInterstitialAd(adUnitId: String, result: Result) {
+        val ad = interstitialAds[adUnitId]
         val currentActivity = activity
         
         if (ad != null && currentActivity != null) {
@@ -241,7 +279,7 @@ class NativeGoogleadsPlugin :
         }
     }
 
-    private fun loadRewardedAd(adUnitId: String, result: Result) {
+    private fun preloadRewardedAd(adUnitId: String, result: Result) {
         val adRequest = AdRequest.Builder().build()
 
         RewardedAd.load(
@@ -250,32 +288,43 @@ class NativeGoogleadsPlugin :
             adRequest,
             object : RewardedAdLoadCallback() {
                 override fun onAdFailedToLoad(adError: LoadAdError) {
-                    rewardedAd = null
+                    rewardedAds.remove(adUnitId)
                     result.error("AD_LOAD_ERROR", adError.message, adError.code)
                 }
 
                 override fun onAdLoaded(ad: RewardedAd) {
-                    rewardedAd = ad
-                    setupRewardedCallbacks()
+                    rewardedAds[adUnitId] = ad
+                    setupRewardedCallbacks(adUnitId)
                     result.success(true)
                 }
             }
         )
     }
 
-    private fun setupRewardedCallbacks() {
-        rewardedAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
+    private fun setupRewardedCallbacks(adUnitId: String) {
+        rewardedAds[adUnitId]?.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdDismissedFullScreenContent() {
-                rewardedAd = null
+                rewardedAds.remove(adUnitId)
                 channel.invokeMethod("onAdDismissed", mapOf("type" to "rewarded"))
+                // Auto-preload next
+                preloadRewardedAd(adUnitId, object : Result {
+                    override fun success(result: Any?) {}
+                    override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {}
+                    override fun notImplemented() {}
+                })
             }
 
             override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                rewardedAd = null
+                rewardedAds.remove(adUnitId)
                 channel.invokeMethod("onAdFailedToShow", mapOf(
                     "type" to "rewarded",
                     "error" to adError.message
                 ))
+                preloadRewardedAd(adUnitId, object : Result {
+                    override fun success(result: Any?) {}
+                    override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {}
+                    override fun notImplemented() {}
+                })
             }
 
             override fun onAdShowedFullScreenContent() {
@@ -284,8 +333,8 @@ class NativeGoogleadsPlugin :
         }
     }
 
-    private fun showRewardedAd(result: Result) {
-        val ad = rewardedAd
+    private fun showRewardedAd(adUnitId: String, result: Result) {
+        val ad = rewardedAds[adUnitId]
         val currentActivity = activity
         
         if (ad != null && currentActivity != null) {
