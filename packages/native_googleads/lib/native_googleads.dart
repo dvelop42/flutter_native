@@ -136,6 +136,7 @@ class NativeGoogleads {
     required String adUnitId,
     AdRequestConfig? requestConfig,
   }) async {
+    _validateAdUnitId(adUnitId);
     try {
       final params = <String, dynamic>{
         'adUnitId': adUnitId,
@@ -189,6 +190,7 @@ class NativeGoogleads {
     required String adUnitId,
     AdRequestConfig? requestConfig,
   }) async {
+    _validateAdUnitId(adUnitId);
     try {
       final params = <String, dynamic>{
         'adUnitId': adUnitId,
@@ -248,6 +250,7 @@ class NativeGoogleads {
     required BannerAdSize size,
     AdRequestConfig? requestConfig,
   }) async {
+    _validateAdUnitId(adUnitId);
     try {
       debugPrint('Loading banner ad: adUnitId=$adUnitId, size=${size.name}');
       final params = <String, dynamic>{
@@ -342,6 +345,7 @@ class NativeGoogleads {
     required String adUnitId,
     AdRequestConfig? requestConfig,
   }) async {
+    _validateAdUnitId(adUnitId);
     try {
       debugPrint('Loading native ad: adUnitId=$adUnitId');
       final params = <String, dynamic>{
@@ -397,6 +401,34 @@ class NativeGoogleads {
     } catch (e) {
       debugPrint('Error disposing native ad: $e');
       return false;
+    }
+  }
+  
+  /// Validates an ad unit ID format.
+  /// 
+  /// Throws ArgumentError if the ID is empty.
+  /// Prints a warning if the ID doesn't match expected AdMob format.
+  void _validateAdUnitId(String adUnitId) {
+    if (adUnitId.isEmpty) {
+      throw ArgumentError('Ad unit ID cannot be empty');
+    }
+    
+    // Check for valid AdMob format: ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY
+    // or test IDs which have different formats
+    final testIds = [
+      AdTestIds.androidAppId, AdTestIds.iosAppId,
+      AdTestIds.androidBanner, AdTestIds.iosBanner,
+      AdTestIds.androidInterstitial, AdTestIds.iosInterstitial,
+      AdTestIds.androidRewarded, AdTestIds.iosRewarded,
+      AdTestIds.androidNativeAdvanced, AdTestIds.iosNativeAdvanced,
+    ];
+    
+    if (!testIds.contains(adUnitId)) {
+      // Validate production ID format
+      final regex = RegExp(r'^ca-app-pub-\d{16}/\d{10}$');
+      if (!regex.hasMatch(adUnitId)) {
+        debugPrint('Warning: Ad unit ID "$adUnitId" may be invalid. Expected format: ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY');
+      }
     }
   }
   

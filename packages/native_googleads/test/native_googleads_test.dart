@@ -550,4 +550,99 @@ void main() {
       expect(AdTestIds.iosNativeAdvanced, 'ca-app-pub-3940256099942544/3986624511');
     });
   });
+  
+  group('Additional NativeGoogleads Tests', () {
+    final NativeGoogleads ads = NativeGoogleads.instance;
+    final List<MethodCall> log = <MethodCall>[];
+    
+    setUp(() {
+      log.clear();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('native_googleads'),
+        (MethodCall methodCall) async {
+          log.add(methodCall);
+          switch (methodCall.method) {
+            case 'initialize':
+              return {'isReady': true, 'appId': 'test-app-id', 'adapterStatus': {}};
+            case 'loadBannerAd':
+              return 'banner-id-123';
+            case 'disposeBannerAd':
+              return true;
+            default:
+              return null;
+          }
+        },
+      );
+    });
+    
+    test('validates ad unit ID for empty string', () {
+      // Empty ad unit ID should throw ArgumentError
+      expect(
+        () => ads.loadBannerAd(
+          adUnitId: '',
+          size: BannerAdSize.banner,
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+      
+      expect(
+        () => ads.loadNativeAd(adUnitId: ''),
+        throwsA(isA<ArgumentError>()),
+      );
+      
+      expect(
+        () => ads.loadRewardedAd(adUnitId: ''),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+    
+    test('handles multiple banner ads simultaneously', () async {
+      final result = await ads.initialize();
+      expect(result?['isReady'], true);
+      
+      // Load multiple banners
+      final banner1 = await ads.loadBannerAd(
+        adUnitId: 'test-banner-1',
+        size: BannerAdSize.banner,
+      );
+      final banner2 = await ads.loadBannerAd(
+        adUnitId: 'test-banner-2',
+        size: BannerAdSize.largeBanner,
+      );
+      
+      expect(banner1, isNotNull);
+      expect(banner2, isNotNull);
+      
+      // Dispose in different order
+      await ads.disposeBannerAd(banner2!);
+      await ads.disposeBannerAd(banner1!);
+    });
+    
+    test('handles null returns from platform gracefully', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('native_googleads'),
+        (MethodCall methodCall) async {
+          // Return null for all methods
+          return null;
+        },
+      );
+      
+      // Should handle null and return appropriate defaults
+      final result = await ads.initialize();
+      expect(result, null);
+      
+      final loaded = await ads.loadInterstitialAd(
+        adUnitId: 'test-ad-unit',
+      );
+      expect(loaded, false);
+      
+      final bannerId = await ads.loadBannerAd(
+        adUnitId: 'test-banner',
+        size: BannerAdSize.banner,
+      );
+      expect(bannerId, isNull);
+    });
+  });
 }

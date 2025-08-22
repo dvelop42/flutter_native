@@ -11,6 +11,10 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
     private var adLoaders: [String: GADAdLoader] = [:]
     private var pendingResults: [String: FlutterResult] = [:]
     
+    // Reverse mapping for O(1) lookups
+    private var bannerViewToId: [ObjectIdentifier: String] = [:]
+    private var adLoaderToId: [ObjectIdentifier: String] = [:]
+    
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "native_googleads", binaryMessenger: registrar.messenger())
         let instance = NativeGoogleadsPlugin()
@@ -300,6 +304,7 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
         
         // Store the banner and result for later use
         bannerAds[bannerId] = bannerView
+        bannerViewToId[ObjectIdentifier(bannerView)] = bannerId
         pendingResults[bannerId] = result
         
         let request = GADRequest()
@@ -353,7 +358,9 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
         }
         
         bannerView.removeFromSuperview()
+        bannerViewToId.removeValue(forKey: ObjectIdentifier(bannerView))
         bannerAds.removeValue(forKey: bannerId)
+        pendingResults.removeValue(forKey: bannerId) // Clean up any pending results
         result(true)
     }
     
@@ -371,6 +378,7 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
         
         // Store the loader and result for later use
         adLoaders[nativeAdId] = adLoader
+        adLoaderToId[ObjectIdentifier(adLoader)] = nativeAdId
         pendingResults[nativeAdId] = result
         
         let request = GADRequest()
@@ -399,6 +407,8 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
         }
         
         nativeAds.removeValue(forKey: nativeAdId)
+        adLoaders.removeValue(forKey: nativeAdId)
+        pendingResults.removeValue(forKey: nativeAdId) // Clean up any pending results
         result(true)
     }
     
@@ -414,59 +424,58 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
 
 extension NativeGoogleadsPlugin: GADBannerViewDelegate {
     public func bannerViewDidReceiveAd(_ bannerView: GADBannerView) {
-        // Find the banner ID for this view
-        for (bannerId, view) in bannerAds where view == bannerView {
-            if let result = pendingResults[bannerId] {
-                result(bannerId)
-                pendingResults.removeValue(forKey: bannerId)
-            }
-            return
+        // O(1) lookup using reverse mapping
+        guard let bannerId = bannerViewToId[ObjectIdentifier(bannerView)] else { return }
+        
+        if let result = pendingResults[bannerId] {
+            result(bannerId)
+            pendingResults.removeValue(forKey: bannerId)
         }
     }
     
     public func bannerView(_ bannerView: GADBannerView, didFailToReceiveAdWithError error: Error) {
-        // Find the banner ID for this view
-        for (bannerId, view) in bannerAds where view == bannerView {
-            if let result = pendingResults[bannerId] {
-                let nsError = error as NSError
-                result(FlutterError(code: "AD_LOAD_ERROR",
-                                    message: error.localizedDescription,
-                                    details: nsError.code))
-                pendingResults.removeValue(forKey: bannerId)
-                bannerAds.removeValue(forKey: bannerId)
-            }
-            return
+        // O(1) lookup using reverse mapping
+        guard let bannerId = bannerViewToId[ObjectIdentifier(bannerView)] else { return }
+        
+        if let result = pendingResults[bannerId] {
+            let nsError = error as NSError
+            result(FlutterError(code: "AD_LOAD_ERROR",
+                                message: error.localizedDescription,
+                                details: nsError.code))
+            pendingResults.removeValue(forKey: bannerId)
+            bannerViewToId.removeValue(forKey: ObjectIdentifier(bannerView))
+            bannerAds.removeValue(forKey: bannerId)
         }
     }
 }
 
 extension NativeGoogleadsPlugin: GADNativeAdLoaderDelegate {
     public func adLoader(_ adLoader: GADAdLoader, didReceive nativeAd: GADNativeAd) {
-        // Find the native ad ID for this loader
-        for (nativeAdId, loader) in adLoaders where loader == adLoader {
-            nativeAds[nativeAdId] = nativeAd
-            if let result = pendingResults[nativeAdId] {
-                result(nativeAdId)
-                pendingResults.removeValue(forKey: nativeAdId)
-            }
-            adLoaders.removeValue(forKey: nativeAdId)
-            return
+        // O(1) lookup using reverse mapping
+        guard let nativeAdId = adLoaderToId[ObjectIdentifier(adLoader)] else { return }
+        
+        nativeAds[nativeAdId] = nativeAd
+        if let result = pendingResults[nativeAdId] {
+            result(nativeAdId)
+            pendingResults.removeValue(forKey: nativeAdId)
         }
+        adLoaderToId.removeValue(forKey: ObjectIdentifier(adLoader))
+        adLoaders.removeValue(forKey: nativeAdId)
     }
     
     public func adLoader(_ adLoader: GADAdLoader, didFailToReceiveAdWithError error: Error) {
-        // Find the native ad ID for this loader
-        for (nativeAdId, loader) in adLoaders where loader == adLoader {
-            if let result = pendingResults[nativeAdId] {
-                let nsError = error as NSError
-                result(FlutterError(code: "AD_LOAD_ERROR",
-                                    message: error.localizedDescription,
-                                    details: nsError.code))
-                pendingResults.removeValue(forKey: nativeAdId)
-            }
-            adLoaders.removeValue(forKey: nativeAdId)
-            return
+        // O(1) lookup using reverse mapping
+        guard let nativeAdId = adLoaderToId[ObjectIdentifier(adLoader)] else { return }
+        
+        if let result = pendingResults[nativeAdId] {
+            let nsError = error as NSError
+            result(FlutterError(code: "AD_LOAD_ERROR",
+                                message: error.localizedDescription,
+                                details: nsError.code))
+            pendingResults.removeValue(forKey: nativeAdId)
         }
+        adLoaderToId.removeValue(forKey: ObjectIdentifier(adLoader))
+        adLoaders.removeValue(forKey: nativeAdId)
     }
 }
 
