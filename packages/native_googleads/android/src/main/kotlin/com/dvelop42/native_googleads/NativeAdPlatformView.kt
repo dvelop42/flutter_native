@@ -22,12 +22,20 @@ class NativeAdPlatformView(
     private var nativeAdView: NativeAdView? = null
 
     init {
-        val nativeAdId = creationParams?.get("nativeAdId") as? String
-        if (nativeAdId != null) {
-            val nativeAd = nativeAds[nativeAdId]
-            nativeAd?.let { ad ->
-                setupNativeAdView(ad)
+        try {
+            val nativeAdId = creationParams?.get("nativeAdId") as? String
+            if (nativeAdId != null) {
+                val nativeAd = nativeAds[nativeAdId]
+                nativeAd?.let { ad ->
+                    setupNativeAdView(ad)
+                } ?: run {
+                    android.util.Log.e("NativeAdPlatformView", "Native ad not found for ID: $nativeAdId")
+                }
+            } else {
+                android.util.Log.e("NativeAdPlatformView", "Native ad ID is null in creation params")
             }
+        } catch (e: Exception) {
+            android.util.Log.e("NativeAdPlatformView", "Error initializing native ad view", e)
         }
     }
 
@@ -41,34 +49,36 @@ class NativeAdPlatformView(
             setPadding(16, 16, 16, 16)
         }
 
-        // Create a simple layout for the native ad
-        val contentLayout = FrameLayout(context).apply {
+        // Use LinearLayout for better layout control
+        val contentLayout = android.widget.LinearLayout(context).apply {
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT
             )
+            orientation = android.widget.LinearLayout.VERTICAL
             setBackgroundColor(0xFFFFFFFF.toInt())
             setPadding(16, 16, 16, 16)
         }
 
         // Add headline
         val headlineView = TextView(context).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
-            )
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = 8
+            }
             textSize = 18f
             setTextColor(0xFF000000.toInt())
-            setPadding(0, 0, 0, 8)
         }
         
         // Add body
         val bodyView = TextView(context).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                topMargin = 60
+                bottomMargin = 12
             }
             textSize = 14f
             setTextColor(0xFF666666.toInt())
@@ -76,12 +86,10 @@ class NativeAdPlatformView(
 
         // Add call to action button
         val ctaView = Button(context).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                topMargin = 120
-            }
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            )
         }
 
         contentLayout.addView(headlineView)
@@ -110,6 +118,11 @@ class NativeAdPlatformView(
     override fun getView(): View = container
 
     override fun dispose() {
-        nativeAdView?.destroy()
+        try {
+            nativeAdView?.destroy()
+            nativeAdView = null
+        } catch (e: Exception) {
+            android.util.Log.e("NativeAdPlatformView", "Error disposing native ad view", e)
+        }
     }
 }

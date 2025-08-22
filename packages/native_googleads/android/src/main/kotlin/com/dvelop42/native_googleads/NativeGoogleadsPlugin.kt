@@ -377,10 +377,14 @@ class NativeGoogleadsPlugin :
             val currentActivity = activity
             if (currentActivity != null) {
                 currentActivity.runOnUiThread {
-                    val parent = adView.parent as? ViewGroup
-                    parent?.removeView(adView)
+                    try {
+                        val parent = adView.parent as? ViewGroup
+                        parent?.removeView(adView)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("UI_ERROR", "Failed to hide banner: ${e.message}", null)
+                    }
                 }
-                result.success(true)
             } else {
                 result.error("NO_ACTIVITY", "Activity is not available", null)
             }
@@ -395,15 +399,27 @@ class NativeGoogleadsPlugin :
             val currentActivity = activity
             if (currentActivity != null) {
                 currentActivity.runOnUiThread {
-                    val parent = adView.parent as? ViewGroup
-                    parent?.removeView(adView)
-                    adView.destroy()
+                    try {
+                        val parent = adView.parent as? ViewGroup
+                        parent?.removeView(adView)
+                        adView.destroy()
+                        bannerAds.remove(bannerId)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("DISPOSAL_ERROR", "Failed to dispose banner: ${e.message}", null)
+                    }
                 }
             } else {
-                adView.destroy()
+                // If no activity, still try to destroy the ad and remove from map
+                // This is safe because destroy() handles its own threading
+                try {
+                    adView.destroy()
+                    bannerAds.remove(bannerId)
+                    result.success(true)
+                } catch (e: Exception) {
+                    result.error("DISPOSAL_ERROR", "Failed to dispose banner: ${e.message}", null)
+                }
             }
-            bannerAds.remove(bannerId)
-            result.success(true)
         } else {
             result.error("BANNER_NOT_FOUND", "Banner with ID $bannerId not found", null)
         }

@@ -133,7 +133,7 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
       'height': widget.height,
       if (widget.templateId != null) 'templateId': widget.templateId,
       if (widget.backgroundColor != null) 
-        'backgroundColor': widget.backgroundColor!.value,
+        'backgroundColor': widget.backgroundColor!.toARGB32(),
     };
 
     if (defaultTargetPlatform == TargetPlatform.android) {

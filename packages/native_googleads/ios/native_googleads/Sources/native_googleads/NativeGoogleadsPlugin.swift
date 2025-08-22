@@ -264,111 +264,6 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
             return UIApplication.shared.windows.first?.rootViewController
         }
     }
-}
-
-extension NativeGoogleadsPlugin: GADBannerViewDelegate {
-    public func bannerViewDidReceiveAd(_ bannerView: GADBannerView) {
-        // Find the banner ID for this view
-        for (bannerId, view) in bannerAds where view == bannerView {
-            if let result = pendingResults[bannerId] {
-                result(bannerId)
-                pendingResults.removeValue(forKey: bannerId)
-            }
-            return
-        }
-    }
-    
-    public func bannerView(_ bannerView: GADBannerView, didFailToReceiveAdWithError error: Error) {
-        // Find the banner ID for this view
-        for (bannerId, view) in bannerAds where view == bannerView {
-            if let result = pendingResults[bannerId] {
-                let nsError = error as NSError
-                result(FlutterError(code: "AD_LOAD_ERROR",
-                                    message: error.localizedDescription,
-                                    details: nsError.code))
-                pendingResults.removeValue(forKey: bannerId)
-                bannerAds.removeValue(forKey: bannerId)
-            }
-            return
-        }
-    }
-}
-
-extension NativeGoogleadsPlugin: GADNativeAdLoaderDelegate {
-    public func adLoader(_ adLoader: GADAdLoader, didReceive nativeAd: GADNativeAd) {
-        // Find the native ad ID for this loader
-        for (nativeAdId, loader) in adLoaders where loader == adLoader {
-            nativeAds[nativeAdId] = nativeAd
-            if let result = pendingResults[nativeAdId] {
-                result(nativeAdId)
-                pendingResults.removeValue(forKey: nativeAdId)
-            }
-            adLoaders.removeValue(forKey: nativeAdId)
-            return
-        }
-    }
-    
-    public func adLoader(_ adLoader: GADAdLoader, didFailToReceiveAdWithError error: Error) {
-        // Find the native ad ID for this loader
-        for (nativeAdId, loader) in adLoaders where loader == adLoader {
-            if let result = pendingResults[nativeAdId] {
-                let nsError = error as NSError
-                result(FlutterError(code: "AD_LOAD_ERROR",
-                                    message: error.localizedDescription,
-                                    details: nsError.code))
-                pendingResults.removeValue(forKey: nativeAdId)
-            }
-            adLoaders.removeValue(forKey: nativeAdId)
-            return
-        }
-    }
-}
-
-extension NativeGoogleadsPlugin: GADFullScreenContentDelegate {
-    public func adWillDismissFullScreenContent(_ ad: GADFullScreenPresentingAd) {
-        // Called when the ad is about to dismiss
-    }
-    
-    public func adDidDismissFullScreenContent(_ ad: GADFullScreenPresentingAd) {
-        let type = ad is GADInterstitialAd ? "interstitial" : "rewarded"
-        
-        if ad is GADInterstitialAd {
-            interstitialAd = nil
-        } else if ad is GADRewardedAd {
-            rewardedAd = nil
-        }
-        
-        channel?.invokeMethod("onAdDismissed", arguments: ["type": type])
-    }
-    
-    public func ad(_ ad: GADFullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: Error) {
-        let type = ad is GADInterstitialAd ? "interstitial" : "rewarded"
-        
-        if ad is GADInterstitialAd {
-            interstitialAd = nil
-        } else if ad is GADRewardedAd {
-            rewardedAd = nil
-        }
-        
-        channel?.invokeMethod("onAdFailedToShow", arguments: [
-            "type": type,
-            "error": error.localizedDescription
-        ])
-    }
-    
-    public func adWillPresentFullScreenContent(_ ad: GADFullScreenPresentingAd) {
-        // Called when the ad is about to be presented
-        let type = ad is GADInterstitialAd ? "interstitial" : "rewarded"
-        channel?.invokeMethod("onAdShowed", arguments: ["type": type])
-    }
-    
-    public func adDidRecordImpression(_ ad: GADFullScreenPresentingAd) {
-        // Called when an impression is recorded
-    }
-    
-    public func adDidRecordClick(_ ad: GADFullScreenPresentingAd) {
-        // Called when a click is recorded
-    }
     
     private func loadBannerAd(adUnitId: String, sizeIndex: Int, result: @escaping FlutterResult) {
         let bannerId = UUID().uuidString
@@ -514,5 +409,110 @@ extension NativeGoogleadsPlugin: GADFullScreenContentDelegate {
     
     func getNativeAd(for nativeAdId: String) -> GADNativeAd? {
         return nativeAds[nativeAdId]
+    }
+}
+
+extension NativeGoogleadsPlugin: GADBannerViewDelegate {
+    public func bannerViewDidReceiveAd(_ bannerView: GADBannerView) {
+        // Find the banner ID for this view
+        for (bannerId, view) in bannerAds where view == bannerView {
+            if let result = pendingResults[bannerId] {
+                result(bannerId)
+                pendingResults.removeValue(forKey: bannerId)
+            }
+            return
+        }
+    }
+    
+    public func bannerView(_ bannerView: GADBannerView, didFailToReceiveAdWithError error: Error) {
+        // Find the banner ID for this view
+        for (bannerId, view) in bannerAds where view == bannerView {
+            if let result = pendingResults[bannerId] {
+                let nsError = error as NSError
+                result(FlutterError(code: "AD_LOAD_ERROR",
+                                    message: error.localizedDescription,
+                                    details: nsError.code))
+                pendingResults.removeValue(forKey: bannerId)
+                bannerAds.removeValue(forKey: bannerId)
+            }
+            return
+        }
+    }
+}
+
+extension NativeGoogleadsPlugin: GADNativeAdLoaderDelegate {
+    public func adLoader(_ adLoader: GADAdLoader, didReceive nativeAd: GADNativeAd) {
+        // Find the native ad ID for this loader
+        for (nativeAdId, loader) in adLoaders where loader == adLoader {
+            nativeAds[nativeAdId] = nativeAd
+            if let result = pendingResults[nativeAdId] {
+                result(nativeAdId)
+                pendingResults.removeValue(forKey: nativeAdId)
+            }
+            adLoaders.removeValue(forKey: nativeAdId)
+            return
+        }
+    }
+    
+    public func adLoader(_ adLoader: GADAdLoader, didFailToReceiveAdWithError error: Error) {
+        // Find the native ad ID for this loader
+        for (nativeAdId, loader) in adLoaders where loader == adLoader {
+            if let result = pendingResults[nativeAdId] {
+                let nsError = error as NSError
+                result(FlutterError(code: "AD_LOAD_ERROR",
+                                    message: error.localizedDescription,
+                                    details: nsError.code))
+                pendingResults.removeValue(forKey: nativeAdId)
+            }
+            adLoaders.removeValue(forKey: nativeAdId)
+            return
+        }
+    }
+}
+
+extension NativeGoogleadsPlugin: GADFullScreenContentDelegate {
+    public func adWillDismissFullScreenContent(_ ad: GADFullScreenPresentingAd) {
+        // Called when the ad is about to dismiss
+    }
+    
+    public func adDidDismissFullScreenContent(_ ad: GADFullScreenPresentingAd) {
+        let type = ad is GADInterstitialAd ? "interstitial" : "rewarded"
+        
+        if ad is GADInterstitialAd {
+            interstitialAd = nil
+        } else if ad is GADRewardedAd {
+            rewardedAd = nil
+        }
+        
+        channel?.invokeMethod("onAdDismissed", arguments: ["type": type])
+    }
+    
+    public func ad(_ ad: GADFullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: Error) {
+        let type = ad is GADInterstitialAd ? "interstitial" : "rewarded"
+        
+        if ad is GADInterstitialAd {
+            interstitialAd = nil
+        } else if ad is GADRewardedAd {
+            rewardedAd = nil
+        }
+        
+        channel?.invokeMethod("onAdFailedToShow", arguments: [
+            "type": type,
+            "error": error.localizedDescription
+        ])
+    }
+    
+    public func adWillPresentFullScreenContent(_ ad: GADFullScreenPresentingAd) {
+        // Called when the ad is about to be presented
+        let type = ad is GADInterstitialAd ? "interstitial" : "rewarded"
+        channel?.invokeMethod("onAdShowed", arguments: ["type": type])
+    }
+    
+    public func adDidRecordImpression(_ ad: GADFullScreenPresentingAd) {
+        // Called when an impression is recorded
+    }
+    
+    public func adDidRecordClick(_ ad: GADFullScreenPresentingAd) {
+        // Called when a click is recorded
     }
 }

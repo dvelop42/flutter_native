@@ -15,21 +15,35 @@ class BannerAdPlatformView(
     private var adView: AdView? = null
 
     init {
-        val bannerId = creationParams?.get("bannerId") as? String
-        if (bannerId != null) {
-            adView = bannerAds[bannerId]
-            adView?.let { ad ->
-                // Remove from any existing parent
-                (ad.parent as? FrameLayout)?.removeView(ad)
-                // Add to our container
-                container.addView(ad)
+        try {
+            val bannerId = creationParams?.get("bannerId") as? String
+            if (bannerId != null) {
+                adView = bannerAds[bannerId]
+                adView?.let { ad ->
+                    // Remove from any existing parent
+                    (ad.parent as? android.view.ViewGroup)?.removeView(ad)
+                    // Add to our container
+                    container.addView(ad)
+                } ?: run {
+                    android.util.Log.e("BannerAdPlatformView", "Banner ad not found for ID: $bannerId")
+                }
+            } else {
+                android.util.Log.e("BannerAdPlatformView", "Banner ID is null in creation params")
             }
+        } catch (e: Exception) {
+            android.util.Log.e("BannerAdPlatformView", "Error initializing banner ad view", e)
         }
     }
 
     override fun getView(): View = container
 
     override fun dispose() {
-        // Don't dispose the ad here, let the main plugin handle it
+        // Remove the ad view from container before disposal
+        adView?.let { ad ->
+            container.removeView(ad)
+        }
+        // Note: The actual ad disposal is handled by the main plugin
+        // when disposeBannerAd is called from Flutter
+        adView = null
     }
 }
