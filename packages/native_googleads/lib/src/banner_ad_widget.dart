@@ -26,6 +26,11 @@ class BannerAdWidget extends StatefulWidget {
   /// Optional request configuration.
   final AdRequestConfig? requestConfig;
 
+  /// Optional preloaded banner ID returned by `loadBannerAd`.
+  ///
+  /// If provided, the widget will skip loading and render this preloaded ad.
+  final String? preloadedBannerId;
+
   /// Called when the ad loads successfully.
   final VoidCallback? onAdLoaded;
 
@@ -47,6 +52,7 @@ class BannerAdWidget extends StatefulWidget {
     this.onAdFailedToLoad,
     this.onAdClicked,
     this.onAdImpression,
+    this.preloadedBannerId,
   });
 
   @override
@@ -66,6 +72,13 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
     debugPrint(
         'BannerAdWidget: initState called for adUnitId: ${widget.adUnitId}');
     _setAdHeight();
+    // If a preloaded bannerId is provided, use it directly
+    if (widget.preloadedBannerId != null && widget.preloadedBannerId!.isNotEmpty) {
+      _bannerId = widget.preloadedBannerId;
+      _isLoaded = true;
+      // Attempt to show immediately
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showAd());
+    }
   }
 
   @override
@@ -124,6 +137,7 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
 
   Future<void> _loadAd() async {
     debugPrint('BannerAdWidget: Starting to load ad');
+    if (_bannerId != null) return; // Already have a preloaded id
     // Validate size before loading
     final validatedSize = _getValidatedSize();
     if (validatedSize != widget.size) {

@@ -47,6 +47,11 @@ class NativeGoogleads {
 
   final MethodChannel _channel = const MethodChannel('native_googleads');
 
+  // Production ID validation options
+  bool _disallowTestIdsInRelease = true;
+  bool _strictTestIdPolicy = false;
+  bool? _forceReleaseModeForTesting; // used only in tests
+
   AdCallback? _onAdDismissed;
   AdCallback? _onAdShowed;
   AdErrorCallback? _onAdFailedToShow;
@@ -54,6 +59,31 @@ class NativeGoogleads {
 
   NativeGoogleads._() {
     _channel.setMethodCallHandler(_handleMethodCall);
+  }
+
+  /// Configure validation policy for using Google's test ad unit IDs in release.
+  ///
+  /// [disallowTestIdsInRelease] when true (default), will warn in release builds
+  /// if a Google test ad unit ID is used. When false, the check is disabled.
+  ///
+  /// [strict] when true, will throw an error in release builds if a Google
+  /// test ad unit ID is used. When false (default), only warns.
+  void setAdIdValidationPolicy({
+    bool? disallowTestIdsInRelease,
+    bool? strict,
+  }) {
+    if (disallowTestIdsInRelease != null) {
+      _disallowTestIdsInRelease = disallowTestIdsInRelease;
+    }
+    if (strict != null) {
+      _strictTestIdPolicy = strict;
+    }
+  }
+
+  /// INTERNAL – test-only override for release-mode detection in validation.
+  @visibleForTesting
+  void debugSetForceReleaseModeForValidation(bool? isRelease) {
+    _forceReleaseModeForTesting = isRelease;
   }
 
   /// Gets the platform version string.
@@ -254,7 +284,7 @@ class NativeGoogleads {
   /// When the user completes watching the ad, the [onUserEarnedReward]
   /// callback will be triggered.
   ///
-  /// Make sure to load an ad first using [loadRewardedAd].
+  /// Make sure to preload an ad first using [preloadRewardedAd].
   Future<bool> showRewardedAd({required String adUnitId}) async {
     try {
       final result = await _channel.invokeMethod<bool>(
@@ -466,7 +496,21 @@ class NativeGoogleads {
       AdTestIds.iosNativeAdvanced,
     ];
 
-    if (!testIds.contains(adUnitId)) {
+    final inTestIds = testIds.contains(adUnitId);
+
+    // Enforce production safety: block or warn on test IDs in release builds
+    final bool isReleaseMode = _forceReleaseModeForTesting ?? kReleaseMode;
+    if (isReleaseMode && _disallowTestIdsInRelease && inTestIds) {
+      final msg =
+          'Using Google test ad unit ID "$adUnitId" in release build. Configure production IDs.';
+      if (_strictTestIdPolicy) {
+        throw ArgumentError(msg);
+      } else {
+        debugPrint('Warning: $msg');
+      }
+    }
+
+    if (!inTestIds) {
       // Validate production ID format
       final regex = RegExp(r'^ca-app-pub-\d{16}/\d{10}$');
       if (!regex.hasMatch(adUnitId)) {

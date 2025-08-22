@@ -115,6 +115,31 @@ final rewardedAdUnitId = Platform.isAndroid
 await _ads.preloadRewardedAd(adUnitId: rewardedAdUnitId);
 ```
 
+#### Preloaded Fullscreen Ads (Demo Page)
+
+The example includes a dedicated page to experience preloading behavior for interstitial and rewarded ads:
+
+- Navigate to: Home → "Preloaded Fullscreen Ads"
+- Actions per ad type:
+  - Preload: loads and warms the cache
+  - Check Ready: queries native cache state
+  - Show: displays when ready
+- After dismiss or failure, native code auto-preloads next; the UI reflects readiness after a short delay.
+
+#### Preloaded Banner (Demo Page)
+
+- Flow: tap Preload to call `loadBannerAd(...)`, then render via `BannerAdWidget(preloadedBannerId: ...)`.
+- Notes:
+  - Widget accepts a preloaded banner ID to skip internal loading.
+  - On iOS, prefer the widget approach over programmatic `showBannerAd` to place the banner in the layout.
+
+#### Preloaded Native (Demo Page)
+
+- Flow: tap Preload to call `loadNativeAd(...)`, then render via `NativeAdWidget(preloadedNativeAdId: ...)`.
+- Notes:
+  - Widget accepts a preloaded native ad ID to skip internal loading.
+  - On failure, the card is skipped to keep content flow natural.
+
 #### Setting Up Callbacks
 
 ```dart
@@ -141,7 +166,10 @@ _ads.setAdCallbacks(
 late final String interstitialId;
 
 Future<void> initAds() async {
-  await _ads.initializeWithConfig(AdConfig.test());
+  // Initialize with test App ID for development
+  await _ads.initialize(appId: Platform.isAndroid
+      ? AdTestIds.androidAppId
+      : AdTestIds.iosAppId);
   interstitialId = Platform.isAndroid
       ? AdTestIds.androidInterstitial
       : AdTestIds.iosInterstitial;
@@ -198,6 +226,15 @@ The example app includes:
    - Load button
    - Show button (enabled when ad is ready)
    - Status indicator
+5. **Preloaded Fullscreen Ads**:
+   - Combined page for Interstitial + Rewarded
+   - Preload / Check Ready / Show controls
+   - Shows auto-preload behavior after dismissal
+
+### Handling Load Failures Gracefully
+
+- Banner Ads: if loading fails, the banner slot is hidden automatically, avoiding awkward blank space.
+- Native Ads: the demo skips the native ad insertion when load fails, letting content flow naturally.
 
 ## Troubleshooting
 
@@ -234,3 +271,9 @@ To use in production:
 ## License
 
 MIT - See LICENSE file for details
+ 
+---
+
+Notes:
+- When using `BannerAdWidget` in the example, do not call `showBannerAd`/`hideBannerAd`; the PlatformView attaches the banner inside the widget.
+- On iOS, the programmatic `showBannerAd` API attaches banners to the root view controller, not inside a widget tree.

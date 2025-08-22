@@ -664,4 +664,75 @@ void main() {
       expect(bannerId, isNull);
     });
   });
+
+  group('Production/test ID validation policy', () {
+    final NativeGoogleads ads = NativeGoogleads.instance;
+    final List<MethodCall> log = <MethodCall>[];
+
+    setUp(() {
+      log.clear();
+      // Force release mode for validation path
+      ads.debugSetForceReleaseModeForValidation(true);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('native_googleads'),
+        (MethodCall methodCall) async {
+          log.add(methodCall);
+          switch (methodCall.method) {
+            case 'preloadInterstitialAd':
+              return true;
+            default:
+              return null;
+          }
+        },
+      );
+    });
+
+    tearDown(() {
+      ads.debugSetForceReleaseModeForValidation(null);
+      ads.setAdIdValidationPolicy(
+        disallowTestIdsInRelease: true,
+        strict: false,
+      );
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('native_googleads'),
+        null,
+      );
+    });
+
+    test('warn-only policy allows test IDs in release (no throw)', () async {
+      // default policy: disallow true + strict false => warn only
+      final ok = await ads.preloadInterstitialAd(
+        adUnitId: AdTestIds.androidInterstitial,
+      );
+      expect(ok, true);
+      expect(log, [
+        isMethodCall('preloadInterstitialAd', arguments: {
+          'adUnitId': AdTestIds.androidInterstitial,
+        }),
+      ]);
+    });
+
+    test('strict policy throws on test IDs in release', () async {
+      ads.setAdIdValidationPolicy(strict: true);
+      expect(
+        () => ads.preloadInterstitialAd(
+          adUnitId: AdTestIds.androidInterstitial,
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+      // No platform call should be made
+      expect(log, isEmpty);
+    });
+
+    test('allowTestIdsInRelease disables the check', () async {
+      ads.setAdIdValidationPolicy(disallowTestIdsInRelease: false, strict: true);
+      final ok = await ads.preloadInterstitialAd(
+        adUnitId: AdTestIds.androidInterstitial,
+      );
+      expect(ok, true);
+      expect(log, isNotEmpty);
+    });
+  });
 }
