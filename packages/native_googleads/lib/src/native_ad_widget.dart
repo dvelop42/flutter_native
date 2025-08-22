@@ -1,0 +1,169 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../native_googleads.dart';
+
+/// A widget that displays a native ad.
+/// 
+/// Native ads are customizable ads that match the look and feel of your app.
+/// 
+/// Example:
+/// ```dart
+/// NativeAdWidget(
+///   adUnitId: 'ca-app-pub-xxxxx/xxxxx',
+///   height: 300,
+///   onAdLoaded: () => print('Native ad loaded'),
+///   onAdFailedToLoad: (error) => print('Native ad failed: $error'),
+/// )
+/// ```
+class NativeAdWidget extends StatefulWidget {
+  /// The ad unit ID for the native ad.
+  final String adUnitId;
+  
+  /// The height of the native ad container.
+  final double height;
+  
+  /// Optional request configuration.
+  final AdRequestConfig? requestConfig;
+  
+  /// Called when the ad loads successfully.
+  final VoidCallback? onAdLoaded;
+  
+  /// Called when the ad fails to load.
+  final Function(String error)? onAdFailedToLoad;
+  
+  /// Called when the ad is clicked.
+  final VoidCallback? onAdClicked;
+  
+  /// Called when the ad impression is recorded.
+  final VoidCallback? onAdImpression;
+  
+  /// Background color for the ad container.
+  final Color? backgroundColor;
+  
+  /// Custom template ID for native ads (optional).
+  final String? templateId;
+  
+  const NativeAdWidget({
+    super.key,
+    required this.adUnitId,
+    this.height = 250.0,
+    this.requestConfig,
+    this.onAdLoaded,
+    this.onAdFailedToLoad,
+    this.onAdClicked,
+    this.onAdImpression,
+    this.backgroundColor,
+    this.templateId,
+  });
+
+  @override
+  State<NativeAdWidget> createState() => _NativeAdWidgetState();
+}
+
+class _NativeAdWidgetState extends State<NativeAdWidget> {
+  final NativeGoogleads _ads = NativeGoogleads.instance;
+  String? _nativeAdId;
+  bool _isLoaded = false;
+  bool _isShowing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    debugPrint('NativeAdWidget: initState called for adUnitId: ${widget.adUnitId}');
+    _loadAd();
+  }
+
+  Future<void> _loadAd() async {
+    debugPrint('NativeAdWidget: Starting to load ad');
+    final nativeAdId = await _ads.loadNativeAd(
+      adUnitId: widget.adUnitId,
+      requestConfig: widget.requestConfig,
+    );
+    
+    if (nativeAdId != null && mounted) {
+      debugPrint('NativeAdWidget: Ad loaded successfully with ID: $nativeAdId');
+      setState(() {
+        _nativeAdId = nativeAdId;
+        _isLoaded = true;
+      });
+      widget.onAdLoaded?.call();
+      // Automatically show the native ad once loaded
+      _showAd();
+    } else {
+      debugPrint('NativeAdWidget: Failed to load ad');
+      widget.onAdFailedToLoad?.call('Failed to load native ad');
+    }
+  }
+  
+  Future<void> _showAd() async {
+    if (_nativeAdId != null && !_isShowing) {
+      final success = await _ads.showNativeAd(_nativeAdId!);
+      if (success && mounted) {
+        setState(() {
+          _isShowing = true;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_nativeAdId != null) {
+      _ads.disposeNativeAd(_nativeAdId!);
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isLoaded || _nativeAdId == null) {
+      return Container(
+        height: widget.height,
+        color: widget.backgroundColor ?? Colors.grey[200],
+        child: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    final Map<String, dynamic> creationParams = {
+      'nativeAdId': _nativeAdId,
+      'adUnitId': widget.adUnitId,
+      'height': widget.height,
+      if (widget.templateId != null) 'templateId': widget.templateId,
+      if (widget.backgroundColor != null) 
+        'backgroundColor': widget.backgroundColor!.toARGB32(),
+    };
+
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return Container(
+        height: widget.height,
+        color: widget.backgroundColor,
+        child: AndroidView(
+          viewType: 'native_googleads/native',
+          creationParams: creationParams,
+          creationParamsCodec: const StandardMessageCodec(),
+          onPlatformViewCreated: (int id) {
+            debugPrint('Native ad platform view created with id: $id');
+          },
+        ),
+      );
+    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return Container(
+        height: widget.height,
+        color: widget.backgroundColor,
+        child: UiKitView(
+          viewType: 'native_googleads/native',
+          creationParams: creationParams,
+          creationParamsCodec: const StandardMessageCodec(),
+          onPlatformViewCreated: (int id) {
+            debugPrint('Native ad platform view created with id: $id');
+          },
+        ),
+      );
+    }
+    
+    return const SizedBox.shrink();
+  }
+}
