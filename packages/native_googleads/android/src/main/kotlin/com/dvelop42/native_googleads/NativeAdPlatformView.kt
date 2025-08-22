@@ -89,14 +89,14 @@ class NativeAdPlatformView(
         contentLayout.addView(ctaView)
 
         nativeAdView?.apply {
-            headlineView = headlineView
-            bodyView = bodyView
-            callToActionView = ctaView
+            this.headlineView = headlineView
+            this.bodyView = bodyView
+            this.callToActionView = ctaView
             
             // Set the native ad data
-            headlineView.text = nativeAd.headline
-            bodyView.text = nativeAd.body
-            ctaView.text = nativeAd.callToAction
+            (this.headlineView as? TextView)?.text = nativeAd.headline
+            (this.bodyView as? TextView)?.text = nativeAd.body
+            (this.callToActionView as? Button)?.text = nativeAd.callToAction
 
             // Associate the native ad with the view
             setNativeAd(nativeAd)

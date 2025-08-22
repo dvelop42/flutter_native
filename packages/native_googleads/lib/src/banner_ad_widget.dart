@@ -65,7 +65,15 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
     super.initState();
     debugPrint('BannerAdWidget: initState called for adUnitId: ${widget.adUnitId}');
     _setAdHeight();
-    _loadAd();
+  }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Load ad after context is available for MediaQuery
+    if (!_isLoaded && _bannerId == null) {
+      _loadAd();
+    }
   }
 
   void _setAdHeight() {
