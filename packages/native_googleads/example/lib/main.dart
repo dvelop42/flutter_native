@@ -287,8 +287,6 @@ class NativeAdPage extends StatefulWidget {
 }
 
 class _NativeAdPageState extends State<NativeAdPage> {
-  bool _isAdLoaded = false;
-
   @override
   void initState() {
     super.initState();
@@ -337,15 +335,22 @@ class _NativeAdPageState extends State<NativeAdPage> {
                     backgroundColor: Colors.white,
                     onAdLoaded: () {
                       debugPrint('Native ad loaded');
-                      setState(() {
-                        _isAdLoaded = true;
-                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Native ad loaded successfully!'),
+                          backgroundColor: Colors.green,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
                     },
                     onAdFailedToLoad: (error) {
                       debugPrint('Native ad failed to load: $error');
-                      setState(() {
-                        _isAdLoaded = false;
-                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Native ad failed: $error'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
                     },
                   ),
                 ),

@@ -11,17 +11,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:native_googleads_example/main.dart';
 
 void main() {
-  testWidgets('Verify Platform version', (WidgetTester tester) async {
+  testWidgets('Verify app builds and shows home page', (WidgetTester tester) async {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const MyApp());
 
-    // Verify that platform version is retrieved.
-    expect(
-      find.byWidgetPredicate(
-        (Widget widget) => widget is Text &&
-                           widget.data!.startsWith('Running on:'),
-      ),
-      findsOneWidget,
-    );
+    // Verify that the app title is shown
+    expect(find.text('Native Google Ads Demo'), findsOneWidget);
+    
+    // Verify that ad type cards are present
+    expect(find.text('Banner Ads'), findsOneWidget);
+    expect(find.text('Native Ads'), findsOneWidget);
+    expect(find.text('Interstitial Ads'), findsOneWidget);
+    expect(find.text('Rewarded Ads'), findsOneWidget);
   });
 }
