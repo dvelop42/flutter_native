@@ -176,11 +176,7 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
     // Clean up native ad resources
     if (_nativeAdId != null) {
       _ads.disposeNativeAd(_nativeAdId!);
-      _nativeAdId = null;
     }
-    // Reset state flags
-    _isLoaded = false;
-    _isShowing = false;
     super.dispose();
   }
 
