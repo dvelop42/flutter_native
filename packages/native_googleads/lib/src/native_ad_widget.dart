@@ -12,6 +12,9 @@ import '../native_googleads.dart';
 /// NativeAdWidget(
 ///   adUnitId: 'ca-app-pub-xxxxx/xxxxx',
 ///   height: 300,
+///   style: NativeAdStyle(
+///     mediaStyle: NativeAdMediaStyle(aspectRatio: 16/9),
+///   ),
 ///   onAdLoaded: () => print('Native ad loaded'),
 ///   onAdFailedToLoad: (error) => print('Native ad failed: $error'),
 /// )
@@ -49,6 +52,15 @@ class NativeAdWidget extends StatefulWidget {
   /// If provided, the widget will skip loading and render this preloaded ad.
   final String? preloadedNativeAdId;
 
+  /// Native ad style configuration
+  final NativeAdStyle? style;
+
+  /// Native ad template type
+  final NativeAdTemplate? template;
+
+  /// Whether to show the ad in full screen mode
+  final bool isFullScreen;
+
   const NativeAdWidget({
     super.key,
     required this.adUnitId,
@@ -61,6 +73,9 @@ class NativeAdWidget extends StatefulWidget {
     this.backgroundColor,
     this.templateId,
     this.preloadedNativeAdId,
+    this.style,
+    this.template,
+    this.isFullScreen = false,
   });
 
   @override
@@ -72,12 +87,16 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
   String? _nativeAdId;
   bool _isLoaded = false;
   bool _isShowing = false;
+  late final Map<String, dynamic> _creationParams;
 
   @override
   void initState() {
     super.initState();
     debugPrint(
         'NativeAdWidget: initState called for adUnitId: ${widget.adUnitId}');
+    // Initialize creation params once
+    _initializeCreationParams();
+    
     if (widget.preloadedNativeAdId != null && widget.preloadedNativeAdId!.isNotEmpty) {
       _nativeAdId = widget.preloadedNativeAdId;
       _isLoaded = true;
@@ -87,25 +106,52 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
     }
   }
 
+  void _initializeCreationParams() {
+    _creationParams = {
+      'adUnitId': widget.adUnitId,
+      'height': widget.height,
+      if (widget.templateId != null) 'templateId': widget.templateId,
+      if (widget.backgroundColor != null)
+        'backgroundColor': widget.backgroundColor!.toARGB32(),
+      if (widget.style != null) 'style': widget.style!.toMap(),
+      if (widget.template != null) 'template': widget.template!.index,
+      'isFullScreen': widget.isFullScreen,
+    };
+  }
+
   Future<void> _loadAd() async {
     debugPrint('NativeAdWidget: Starting to load ad');
-    final nativeAdId = await _ads.loadNativeAd(
-      adUnitId: widget.adUnitId,
-      requestConfig: widget.requestConfig,
-    );
+    try {
+      final nativeAdId = await _ads.loadNativeAd(
+        adUnitId: widget.adUnitId,
+        requestConfig: widget.requestConfig,
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          debugPrint('NativeAdWidget: Ad loading timed out');
+          widget.onAdFailedToLoad?.call('Ad loading timed out after 30 seconds');
+          return null;
+        },
+      );
 
-    if (nativeAdId != null && mounted) {
-      debugPrint('NativeAdWidget: Ad loaded successfully with ID: $nativeAdId');
-      setState(() {
-        _nativeAdId = nativeAdId;
-        _isLoaded = true;
-      });
-      widget.onAdLoaded?.call();
-      // Automatically show the native ad once loaded
-      _showAd();
-    } else {
-      debugPrint('NativeAdWidget: Failed to load ad');
-      widget.onAdFailedToLoad?.call('Failed to load native ad');
+      if (nativeAdId != null && mounted) {
+        debugPrint('NativeAdWidget: Ad loaded successfully with ID: $nativeAdId');
+        setState(() {
+          _nativeAdId = nativeAdId;
+          _isLoaded = true;
+        });
+        widget.onAdLoaded?.call();
+        // Automatically show the native ad once loaded
+        _showAd();
+      } else if (mounted) {
+        debugPrint('NativeAdWidget: Failed to load ad');
+        widget.onAdFailedToLoad?.call('Failed to load native ad');
+      }
+    } catch (e) {
+      debugPrint('NativeAdWidget: Error loading ad: $e');
+      if (mounted) {
+        widget.onAdFailedToLoad?.call('Error loading ad: $e');
+      }
     }
   }
 
@@ -122,9 +168,14 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
 
   @override
   void dispose() {
+    // Clean up native ad resources
     if (_nativeAdId != null) {
       _ads.disposeNativeAd(_nativeAdId!);
+      _nativeAdId = null;
     }
+    // Reset state flags
+    _isLoaded = false;
+    _isShowing = false;
     super.dispose();
   }
 
@@ -140,13 +191,10 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
       );
     }
 
+    // Update nativeAdId in cached params
     final Map<String, dynamic> creationParams = {
+      ..._creationParams,
       'nativeAdId': _nativeAdId,
-      'adUnitId': widget.adUnitId,
-      'height': widget.height,
-      if (widget.templateId != null) 'templateId': widget.templateId,
-      if (widget.backgroundColor != null)
-        'backgroundColor': widget.backgroundColor!.toARGB32(),
     };
 
     if (defaultTargetPlatform == TargetPlatform.android) {

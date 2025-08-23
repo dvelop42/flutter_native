@@ -156,7 +156,8 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
         case "loadNativeAd":
             if let args = call.arguments as? [String: Any],
                let adUnitId = args["adUnitId"] as? String {
-                loadNativeAd(adUnitId: adUnitId, result: result)
+                let mediaAspectRatio = args["mediaAspectRatio"] as? Int
+                loadNativeAd(adUnitId: adUnitId, mediaAspectRatio: mediaAspectRatio, result: result)
             } else {
                 result(FlutterError(code: "INVALID_ARGUMENT",
                                     message: "Ad unit ID is required",
@@ -440,14 +441,31 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
         result(true)
     }
     
-    private func loadNativeAd(adUnitId: String, result: @escaping FlutterResult) {
+    private func loadNativeAd(adUnitId: String, mediaAspectRatio: Int?, result: @escaping FlutterResult) {
         let nativeAdId = UUID().uuidString
+        
+        // Configure native ad options
+        var adLoaderOptions: [GADAdLoaderOptions] = []
+        
+        // Configure media aspect ratio if provided
+        let mediaOptions = GADNativeAdMediaAdLoaderOptions()
+        switch mediaAspectRatio {
+        case 1: // landscape
+            mediaOptions.mediaAspectRatio = .landscape
+        case 2: // portrait
+            mediaOptions.mediaAspectRatio = .portrait
+        case 3: // square
+            mediaOptions.mediaAspectRatio = .square
+        default: // any
+            mediaOptions.mediaAspectRatio = .any
+        }
+        adLoaderOptions.append(mediaOptions)
         
         let adLoader = GADAdLoader(
             adUnitID: adUnitId,
             rootViewController: getRootViewController(),
             adTypes: [.native],
-            options: nil
+            options: adLoaderOptions
         )
         
         adLoader.delegate = self

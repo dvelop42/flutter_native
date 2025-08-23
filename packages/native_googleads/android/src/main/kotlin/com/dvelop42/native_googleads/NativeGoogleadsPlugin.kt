@@ -158,8 +158,9 @@ class NativeGoogleadsPlugin :
             }
             "loadNativeAd" -> {
                 val adUnitId = call.argument<String>("adUnitId")
+                val mediaAspectRatio = call.argument<Int>("mediaAspectRatio")
                 if (adUnitId != null) {
-                    loadNativeAd(adUnitId, result)
+                    loadNativeAd(adUnitId, mediaAspectRatio, result)
                 } else {
                     result.error("INVALID_ARGUMENT", "Ad unit ID is required", null)
                 }
@@ -474,11 +475,26 @@ class NativeGoogleadsPlugin :
         }
     }
     
-    private fun loadNativeAd(adUnitId: String, result: Result) {
+    private fun loadNativeAd(adUnitId: String, mediaAspectRatio: Int?, result: Result) {
         val nativeAdId = UUID.randomUUID().toString()
         android.util.Log.d("NativeGoogleads", "Loading native ad with ID: $nativeAdId, adUnitId: $adUnitId")
         
+        // Configure native ad options with media aspect ratio
+        val nativeAdOptionsBuilder = NativeAdOptions.Builder()
+            .setRequestMultipleImages(true)
+            .setReturnUrlsForImageAssets(false)
+            .setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT)
+        
+        // Set media aspect ratio if provided
+        when (mediaAspectRatio) {
+            1 -> nativeAdOptionsBuilder.setMediaAspectRatio(NativeAdOptions.NATIVE_MEDIA_ASPECT_RATIO_LANDSCAPE)
+            2 -> nativeAdOptionsBuilder.setMediaAspectRatio(NativeAdOptions.NATIVE_MEDIA_ASPECT_RATIO_PORTRAIT)
+            3 -> nativeAdOptionsBuilder.setMediaAspectRatio(NativeAdOptions.NATIVE_MEDIA_ASPECT_RATIO_SQUARE)
+            else -> nativeAdOptionsBuilder.setMediaAspectRatio(NativeAdOptions.NATIVE_MEDIA_ASPECT_RATIO_ANY)
+        }
+        
         val adLoader = com.google.android.gms.ads.AdLoader.Builder(context, adUnitId)
+            .withNativeAdOptions(nativeAdOptionsBuilder.build())
             .forNativeAd { ad ->
                 android.util.Log.d("NativeGoogleads", "Native ad loaded successfully: $nativeAdId")
                 nativeAds[nativeAdId] = ad
@@ -491,11 +507,6 @@ class NativeGoogleadsPlugin :
                     result.error("AD_LOAD_ERROR", adError.message, adError.code)
                 }
             })
-            .withNativeAdOptions(
-                NativeAdOptions.Builder()
-                    .setRequestMultipleImages(true)
-                    .build()
-            )
             .build()
         
         val adRequest = AdRequest.Builder().build()
