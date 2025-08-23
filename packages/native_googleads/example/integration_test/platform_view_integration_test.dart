@@ -28,8 +28,6 @@ void main() {
   group('Platform View Creation and Disposal', () {
     testWidgets('Banner ad platform view creates and disposes correctly',
         (WidgetTester tester) async {
-      bool adLoaded = false;
-      bool adFailed = false;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -37,8 +35,6 @@ void main() {
             body: BannerAdWidget(
               adUnitId: testBannerAdUnitId,
               size: BannerAdSize.banner,
-              onAdLoaded: () => adLoaded = true,
-              onAdFailedToLoad: (_) => adFailed = true,
             ),
           ),
         ),
@@ -67,21 +63,17 @@ void main() {
 
     testWidgets('Native ad platform view creates and disposes correctly',
         (WidgetTester tester) async {
-      bool adLoaded = false;
-      bool adFailed = false;
 
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: SizedBox(
               height: 300,
-              child: NativeAdWidget(
-                adUnitId: testNativeAdUnitId,
-                height: 300,
-                onAdLoaded: () => adLoaded = true,
-                onAdFailedToLoad: (_) => adFailed = true,
+                child: NativeAdWidget(
+                  adUnitId: testNativeAdUnitId,
+                  height: 300,
+                ),
               ),
-            ),
           ),
         ),
       );
@@ -519,8 +511,6 @@ void main() {
   group('Error Handling', () {
     testWidgets('Invalid ad unit ID handling',
         (WidgetTester tester) async {
-      bool errorOccurred = false;
-      String? errorMessage;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -529,8 +519,8 @@ void main() {
               adUnitId: 'invalid-ad-unit-id',
               size: BannerAdSize.banner,
               onAdFailedToLoad: (error) {
-                errorOccurred = true;
-                errorMessage = error;
+                // Log the error for visibility without storing unused locals
+                debugPrint('Banner failed to load: $error');
               },
             ),
           ),
@@ -546,8 +536,6 @@ void main() {
 
     testWidgets('Network error recovery',
         (WidgetTester tester) async {
-      bool errorOccurred = false;
-      bool adLoaded = false;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -558,8 +546,6 @@ void main() {
                   key: const Key('network_test_banner'),
                   adUnitId: testBannerAdUnitId,
                   size: BannerAdSize.banner,
-                  onAdLoaded: () => adLoaded = true,
-                  onAdFailedToLoad: (_) => errorOccurred = true,
                 ),
               ],
             ),
