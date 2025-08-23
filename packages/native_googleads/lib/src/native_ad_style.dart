@@ -98,7 +98,8 @@ class NativeAdStyle {
           'bottom': padding!.bottom,
           'left': padding!.left,
         },
-      if (backgroundColor != null) 'backgroundColor': backgroundColor!.toARGB32(),
+      if (backgroundColor != null)
+        'backgroundColor': backgroundColor!.toARGB32(),
       if (cornerRadius != null) 'cornerRadius': cornerRadius,
       if (headlineTextStyle != null)
         'headlineTextStyle': _textStyleToMap(headlineTextStyle!),
@@ -112,7 +113,8 @@ class NativeAdStyle {
         'storeTextStyle': _textStyleToMap(storeTextStyle!),
       if (callToActionStyle != null)
         'callToActionStyle': callToActionStyle!.toMap(),
-      if (starRatingColor != null) 'starRatingColor': starRatingColor!.toARGB32(),
+      if (starRatingColor != null)
+        'starRatingColor': starRatingColor!.toARGB32(),
       if (mediaStyle != null) 'mediaStyle': mediaStyle!.toMap(),
       if (attributionStyle != null)
         'attributionStyle': attributionStyle!.toMap(),
@@ -122,8 +124,7 @@ class NativeAdStyle {
   Map<String, dynamic> _textStyleToMap(TextStyle style) {
     return {
       if (style.fontSize != null) 'fontSize': style.fontSize,
-      if (style.fontWeight != null)
-        'fontWeight': style.fontWeight!.index,
+      if (style.fontWeight != null) 'fontWeight': style.fontWeight!.index,
       if (style.color != null) 'color': style.color!.toARGB32(),
       if (style.letterSpacing != null) 'letterSpacing': style.letterSpacing,
       if (style.height != null) 'height': style.height,
@@ -164,7 +165,8 @@ class NativeAdButtonStyle {
 
   Map<String, dynamic> toMap() {
     return {
-      if (backgroundColor != null) 'backgroundColor': backgroundColor!.toARGB32(),
+      if (backgroundColor != null)
+        'backgroundColor': backgroundColor!.toARGB32(),
       if (textColor != null) 'textColor': textColor!.toARGB32(),
       if (textStyle != null)
         'textStyle': {
@@ -257,7 +259,8 @@ class NativeAdAttributionStyle {
           if (textStyle!.fontWeight != null)
             'fontWeight': textStyle!.fontWeight!.index,
         },
-      if (backgroundColor != null) 'backgroundColor': backgroundColor!.toARGB32(),
+      if (backgroundColor != null)
+        'backgroundColor': backgroundColor!.toARGB32(),
       if (padding != null)
         'padding': {
           'top': padding!.top,

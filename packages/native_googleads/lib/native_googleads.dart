@@ -47,9 +47,9 @@ class NativeGoogleads {
   static NativeGoogleads get instance => _instance;
 
   final MethodChannel _channel = const MethodChannel('native_googleads');
-  
+
   /// Provides access to the underlying method channel for advanced use cases.
-  /// 
+  ///
   /// Use this for calling platform-specific methods that are not exposed
   /// through the main API, such as iOS-specific timeout configuration.
   MethodChannel get methodChannel => _channel;
@@ -604,10 +604,13 @@ enum BannerAdSize {
 enum NativeAdMediaAspectRatio {
   /// Any aspect ratio (default)
   any,
+
   /// Landscape aspect ratio (16:9)
   landscape,
+
   /// Portrait aspect ratio (9:16)
   portrait,
+
   /// Square aspect ratio (1:1)
   square,
 }

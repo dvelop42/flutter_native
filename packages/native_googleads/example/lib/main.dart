@@ -113,8 +113,8 @@ class _BannerPageState extends State<BannerPage> {
   }
 
   Future<void> _initialize() async {
-    final appId = Platform.isAndroid 
-        ? AdTestIds.androidAppId 
+    final appId = Platform.isAndroid
+        ? AdTestIds.androidAppId
         : AdTestIds.iosAppId;
     await _ads.initialize(appId: appId);
   }
@@ -123,12 +123,9 @@ class _BannerPageState extends State<BannerPage> {
     final adUnitId = Platform.isAndroid
         ? AdTestIds.androidBanner
         : AdTestIds.iosBanner;
-    
-    _bannerId = await _ads.loadBannerAd(
-      adUnitId: adUnitId,
-      size: _size,
-    );
-    
+
+    _bannerId = await _ads.loadBannerAd(adUnitId: adUnitId, size: _size);
+
     if (_bannerId != null) {
       await _ads.showBannerAd(_bannerId!);
       setState(() => _isLoaded = true);
@@ -246,7 +243,8 @@ class _NativePageState extends State<NativePage> {
                   children: [
                     ChoiceChip(
                       label: const Text('16:9'),
-                      selected: _aspectRatio == NativeAdMediaAspectRatio.landscape,
+                      selected:
+                          _aspectRatio == NativeAdMediaAspectRatio.landscape,
                       onSelected: (s) => setState(() {
                         _aspectRatio = NativeAdMediaAspectRatio.landscape;
                         _showAd = false;
@@ -262,7 +260,8 @@ class _NativePageState extends State<NativePage> {
                     ),
                     ChoiceChip(
                       label: const Text('9:16'),
-                      selected: _aspectRatio == NativeAdMediaAspectRatio.portrait,
+                      selected:
+                          _aspectRatio == NativeAdMediaAspectRatio.portrait,
                       onSelected: (s) => setState(() {
                         _aspectRatio = NativeAdMediaAspectRatio.portrait;
                         _showAd = false;
@@ -338,7 +337,7 @@ class GalleryPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final images = List.generate(20, (i) => 'Image ${i + 1}');
-    
+
     return Scaffold(
       appBar: AppBar(title: const Text('Gallery')),
       body: GridView.builder(
@@ -355,10 +354,8 @@ class GalleryPage extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => FullScreenViewer(
-                    images: images,
-                    initialIndex: index,
-                  ),
+                  builder: (_) =>
+                      FullScreenViewer(images: images, initialIndex: index),
                 ),
               );
             },
@@ -408,7 +405,7 @@ class _FullScreenViewerState extends State<FullScreenViewer> {
   void initState() {
     super.initState();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
-    
+
     _items = [];
     for (int i = 0; i < widget.images.length; i++) {
       _items.add(widget.images[i]);
@@ -416,7 +413,7 @@ class _FullScreenViewerState extends State<FullScreenViewer> {
         _items.add('ad');
       }
     }
-    
+
     _current = widget.initialIndex + (widget.initialIndex ~/ 3);
     _controller = PageController(initialPage: _current);
     _initialize();
@@ -427,16 +424,16 @@ class _FullScreenViewerState extends State<FullScreenViewer> {
         ? AdTestIds.androidAppId
         : AdTestIds.iosAppId;
     await _ads.initialize(appId: appId);
-    
+
     // Preload ads for nearby positions
     _preloadNearbyAds();
   }
-  
+
   Future<void> _preloadNearbyAds() async {
     final adUnitId = Platform.isAndroid
         ? AdTestIds.androidNativeAdvanced
         : AdTestIds.iosNativeAdvanced;
-    
+
     // Preload ads within 2 positions of current
     for (int i = 0; i < _items.length; i++) {
       if (_items[i] == 'ad' && (i - _current).abs() <= 2) {
@@ -501,10 +498,7 @@ class _FullScreenViewerState extends State<FullScreenViewer> {
                   child: Center(
                     child: Text(
                       _items[index],
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 32,
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 32),
                     ),
                   ),
                 ),
@@ -573,7 +567,7 @@ class _InterstitialPageState extends State<InterstitialPage> {
         if (type == 'interstitial') setState(() => _ready = false);
       },
     );
-    
+
     final appId = Platform.isAndroid
         ? AdTestIds.androidAppId
         : AdTestIds.iosAppId;
@@ -585,7 +579,7 @@ class _InterstitialPageState extends State<InterstitialPage> {
     final adUnitId = Platform.isAndroid
         ? AdTestIds.androidInterstitial
         : AdTestIds.iosInterstitial;
-    
+
     final success = await _ads.preloadInterstitialAd(adUnitId: adUnitId);
     setState(() {
       _ready = success;
@@ -616,10 +610,7 @@ class _InterstitialPageState extends State<InterstitialPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                ElevatedButton(
-                  onPressed: _load,
-                  child: const Text('Load'),
-                ),
+                ElevatedButton(onPressed: _load, child: const Text('Load')),
                 const SizedBox(width: 16),
                 ElevatedButton(
                   onPressed: _ready ? _show : null,
@@ -662,7 +653,7 @@ class _RewardedPageState extends State<RewardedPage> {
         setState(() => _coins += amount);
       },
     );
-    
+
     final appId = Platform.isAndroid
         ? AdTestIds.androidAppId
         : AdTestIds.iosAppId;
@@ -673,7 +664,7 @@ class _RewardedPageState extends State<RewardedPage> {
     final adUnitId = Platform.isAndroid
         ? AdTestIds.androidRewarded
         : AdTestIds.iosRewarded;
-    
+
     final success = await _ads.preloadRewardedAd(adUnitId: adUnitId);
     setState(() => _ready = success);
   }
@@ -701,10 +692,7 @@ class _RewardedPageState extends State<RewardedPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                ElevatedButton(
-                  onPressed: _load,
-                  child: const Text('Load'),
-                ),
+                ElevatedButton(onPressed: _load, child: const Text('Load')),
                 const SizedBox(width: 16),
                 ElevatedButton(
                   onPressed: _ready ? _show : null,

@@ -6,16 +6,16 @@ import 'package:native_googleads/native_googleads.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  
+
   // Test app IDs (using test IDs from AdTestIds)
   final testAppId = Platform.isAndroid
       ? 'ca-app-pub-3940256099942544' // Android test app ID
       : 'ca-app-pub-3940256099942544'; // iOS test app ID
-  
+
   final testBannerAdUnitId = Platform.isAndroid
       ? 'ca-app-pub-3940256099942544/6300978111' // Android test banner
       : 'ca-app-pub-3940256099942544/2934735716'; // iOS test banner
-  
+
   final testNativeAdUnitId = Platform.isAndroid
       ? 'ca-app-pub-3940256099942544/2247696110' // Android native advanced
       : 'ca-app-pub-3940256099942544/3986624511'; // iOS native advanced
@@ -26,9 +26,9 @@ void main() {
   });
 
   group('Platform View Creation and Disposal', () {
-    testWidgets('Banner ad platform view creates and disposes correctly',
-        (WidgetTester tester) async {
-
+    testWidgets('Banner ad platform view creates and disposes correctly', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -48,11 +48,7 @@ void main() {
 
       // Dispose the widget
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: SizedBox.shrink(),
-          ),
-        ),
+        const MaterialApp(home: Scaffold(body: SizedBox.shrink())),
       );
 
       await tester.pumpAndSettle();
@@ -61,19 +57,16 @@ void main() {
       expect(find.byType(BannerAdWidget), findsNothing);
     });
 
-    testWidgets('Native ad platform view creates and disposes correctly',
-        (WidgetTester tester) async {
-
+    testWidgets('Native ad platform view creates and disposes correctly', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: SizedBox(
               height: 300,
-                child: NativeAdWidget(
-                  adUnitId: testNativeAdUnitId,
-                  height: 300,
-                ),
-              ),
+              child: NativeAdWidget(adUnitId: testNativeAdUnitId, height: 300),
+            ),
           ),
         ),
       );
@@ -86,11 +79,7 @@ void main() {
 
       // Dispose the widget
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: SizedBox.shrink(),
-          ),
-        ),
+        const MaterialApp(home: Scaffold(body: SizedBox.shrink())),
       );
 
       await tester.pumpAndSettle();
@@ -101,8 +90,7 @@ void main() {
   });
 
   group('Multiple Concurrent Platform Views', () {
-    testWidgets('Multiple banner ads can coexist',
-        (WidgetTester tester) async {
+    testWidgets('Multiple banner ads can coexist', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -140,8 +128,7 @@ void main() {
       expect(find.byKey(const Key('banner3')), findsOneWidget);
     });
 
-    testWidgets('Mixed ad types can coexist',
-        (WidgetTester tester) async {
+    testWidgets('Mixed ad types can coexist', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -176,8 +163,7 @@ void main() {
   });
 
   group('Platform View Visibility Changes', () {
-    testWidgets('Ad visibility can be toggled',
-        (WidgetTester tester) async {
+    testWidgets('Ad visibility can be toggled', (WidgetTester tester) async {
       bool showAd = true;
 
       await tester.pumpWidget(
@@ -218,8 +204,9 @@ void main() {
       expect(find.byType(BannerAdWidget), findsOneWidget);
     });
 
-    testWidgets('Ad can be scrolled in and out of view',
-        (WidgetTester tester) async {
+    testWidgets('Ad can be scrolled in and out of view', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -260,8 +247,7 @@ void main() {
   });
 
   group('Performance Benchmarks', () {
-    testWidgets('Banner ad creation performance',
-        (WidgetTester tester) async {
+    testWidgets('Banner ad creation performance', (WidgetTester tester) async {
       final stopwatch = Stopwatch()..start();
 
       await tester.pumpWidget(
@@ -280,13 +266,14 @@ void main() {
 
       // Log performance metrics
       debugPrint('Banner ad creation took: ${stopwatch.elapsedMilliseconds}ms');
-      
+
       // Ensure creation doesn't take too long (adjust threshold as needed)
       expect(stopwatch.elapsedMilliseconds, lessThan(10000)); // 10 seconds max
     });
 
-    testWidgets('Multiple ads creation performance',
-        (WidgetTester tester) async {
+    testWidgets('Multiple ads creation performance', (
+      WidgetTester tester,
+    ) async {
       final stopwatch = Stopwatch()..start();
 
       await tester.pumpWidget(
@@ -312,16 +299,19 @@ void main() {
       stopwatch.stop();
 
       // Log performance metrics
-      debugPrint('5 banner ads creation took: ${stopwatch.elapsedMilliseconds}ms');
-      
+      debugPrint(
+        '5 banner ads creation took: ${stopwatch.elapsedMilliseconds}ms',
+      );
+
       // Ensure multiple ads don't take too long
       expect(stopwatch.elapsedMilliseconds, lessThan(15000)); // 15 seconds max
     });
   });
 
   group('Memory Management', () {
-    testWidgets('Ads are properly disposed when removed from tree',
-        (WidgetTester tester) async {
+    testWidgets('Ads are properly disposed when removed from tree', (
+      WidgetTester tester,
+    ) async {
       // Create initial ad
       await tester.pumpWidget(
         MaterialApp(
@@ -340,11 +330,7 @@ void main() {
 
       // Replace with empty widget (should trigger disposal)
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: SizedBox.shrink(),
-          ),
-        ),
+        const MaterialApp(home: Scaffold(body: SizedBox.shrink())),
       );
 
       await tester.pumpAndSettle();
@@ -367,8 +353,9 @@ void main() {
       expect(find.byKey(const Key('disposable_banner')), findsOneWidget);
     });
 
-    testWidgets('Rapid ad creation and disposal stress test',
-        (WidgetTester tester) async {
+    testWidgets('Rapid ad creation and disposal stress test', (
+      WidgetTester tester,
+    ) async {
       // Rapidly create and dispose ads
       for (int i = 0; i < 5; i++) {
         await tester.pumpWidget(
@@ -387,11 +374,7 @@ void main() {
 
         // Dispose
         await tester.pumpWidget(
-          const MaterialApp(
-            home: Scaffold(
-              body: SizedBox.shrink(),
-            ),
-          ),
+          const MaterialApp(home: Scaffold(body: SizedBox.shrink())),
         );
 
         await tester.pump(const Duration(milliseconds: 500));
@@ -416,8 +399,9 @@ void main() {
   });
 
   group('Dynamic Size Changes', () {
-    testWidgets('Banner ad size can be changed dynamically',
-        (WidgetTester tester) async {
+    testWidgets('Banner ad size can be changed dynamically', (
+      WidgetTester tester,
+    ) async {
       BannerAdSize currentSize = BannerAdSize.banner;
 
       await tester.pumpWidget(
@@ -461,8 +445,9 @@ void main() {
       expect(find.byType(BannerAdWidget), findsOneWidget);
     });
 
-    testWidgets('Native ad height can be adjusted dynamically',
-        (WidgetTester tester) async {
+    testWidgets('Native ad height can be adjusted dynamically', (
+      WidgetTester tester,
+    ) async {
       double adHeight = 200.0;
 
       await tester.pumpWidget(
@@ -509,9 +494,7 @@ void main() {
   });
 
   group('Error Handling', () {
-    testWidgets('Invalid ad unit ID handling',
-        (WidgetTester tester) async {
-
+    testWidgets('Invalid ad unit ID handling', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -534,9 +517,7 @@ void main() {
       expect(find.byType(BannerAdWidget), findsOneWidget);
     });
 
-    testWidgets('Network error recovery',
-        (WidgetTester tester) async {
-
+    testWidgets('Network error recovery', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -561,10 +542,11 @@ void main() {
   });
 
   group('Preloaded Ads', () {
-    testWidgets('Preloaded banner ad can be displayed',
-        (WidgetTester tester) async {
+    testWidgets('Preloaded banner ad can be displayed', (
+      WidgetTester tester,
+    ) async {
       final ads = NativeGoogleads.instance;
-      
+
       // Preload a banner ad
       final bannerId = await ads.loadBannerAd(
         adUnitId: testBannerAdUnitId,
@@ -589,14 +571,13 @@ void main() {
       }
     });
 
-    testWidgets('Preloaded native ad can be displayed',
-        (WidgetTester tester) async {
+    testWidgets('Preloaded native ad can be displayed', (
+      WidgetTester tester,
+    ) async {
       final ads = NativeGoogleads.instance;
-      
+
       // Preload a native ad
-      final nativeId = await ads.loadNativeAd(
-        adUnitId: testNativeAdUnitId,
-      );
+      final nativeId = await ads.loadNativeAd(adUnitId: testNativeAdUnitId);
 
       if (nativeId != null) {
         await tester.pumpWidget(
@@ -622,45 +603,47 @@ void main() {
 
   // Platform-specific tests
   group('Platform Specific Behavior', () {
-    testWidgets('Platform view renders correctly on ${Platform.operatingSystem}',
-        (WidgetTester tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Column(
-              children: [
-                BannerAdWidget(
-                  adUnitId: testBannerAdUnitId,
-                  size: BannerAdSize.banner,
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  height: 300,
-                  child: NativeAdWidget(
-                    adUnitId: testNativeAdUnitId,
-                    height: 300,
+    testWidgets(
+      'Platform view renders correctly on ${Platform.operatingSystem}',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Column(
+                children: [
+                  BannerAdWidget(
+                    adUnitId: testBannerAdUnitId,
+                    size: BannerAdSize.banner,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    height: 300,
+                    child: NativeAdWidget(
+                      adUnitId: testNativeAdUnitId,
+                      height: 300,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.pumpAndSettle(const Duration(seconds: 5));
+        await tester.pumpAndSettle(const Duration(seconds: 5));
 
-      // Both widgets should be present
-      expect(find.byType(BannerAdWidget), findsOneWidget);
-      expect(find.byType(NativeAdWidget), findsOneWidget);
+        // Both widgets should be present
+        expect(find.byType(BannerAdWidget), findsOneWidget);
+        expect(find.byType(NativeAdWidget), findsOneWidget);
 
-      // Platform-specific checks
-      if (Platform.isAndroid) {
-        // Android-specific verifications
-        debugPrint('Running on Android platform');
-      } else if (Platform.isIOS) {
-        // iOS-specific verifications
-        debugPrint('Running on iOS platform');
-      }
-    });
+        // Platform-specific checks
+        if (Platform.isAndroid) {
+          // Android-specific verifications
+          debugPrint('Running on Android platform');
+        } else if (Platform.isIOS) {
+          // iOS-specific verifications
+          debugPrint('Running on iOS platform');
+        }
+      },
+    );
   });
 }

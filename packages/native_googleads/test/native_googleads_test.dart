@@ -727,7 +727,8 @@ void main() {
     });
 
     test('allowTestIdsInRelease disables the check', () async {
-      ads.setAdIdValidationPolicy(disallowTestIdsInRelease: false, strict: true);
+      ads.setAdIdValidationPolicy(
+          disallowTestIdsInRelease: false, strict: true);
       final ok = await ads.preloadInterstitialAd(
         adUnitId: AdTestIds.androidInterstitial,
       );

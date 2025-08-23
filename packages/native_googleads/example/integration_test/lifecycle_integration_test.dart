@@ -36,8 +36,9 @@ void main() {
   });
 
   group('App Lifecycle Management', () {
-    testWidgets('Ads survive app pause and resume',
-        (WidgetTester tester) async {
+    testWidgets('Ads survive app pause and resume', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -82,8 +83,9 @@ void main() {
       expect(find.byKey(const Key('lifecycle_native')), findsOneWidget);
     });
 
-    testWidgets('Ads handle app inactive state correctly',
-        (WidgetTester tester) async {
+    testWidgets('Ads handle app inactive state correctly', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -113,8 +115,9 @@ void main() {
       expect(find.byKey(const Key('inactive_test_banner')), findsOneWidget);
     });
 
-    testWidgets('Fullscreen ads handle lifecycle changes',
-        (WidgetTester tester) async {
+    testWidgets('Fullscreen ads handle lifecycle changes', (
+      WidgetTester tester,
+    ) async {
       final ads = NativeGoogleads.instance;
       bool interstitialReady = false;
       bool rewardedReady = false;
@@ -166,7 +169,9 @@ void main() {
 
       // Check if ads are still ready
       if (interstitialReady) {
-        final stillReady = await ads.isInterstitialReady(testInterstitialAdUnitId);
+        final stillReady = await ads.isInterstitialReady(
+          testInterstitialAdUnitId,
+        );
         debugPrint('Interstitial still ready after lifecycle: $stillReady');
       }
 
@@ -176,8 +181,9 @@ void main() {
       }
     });
 
-    testWidgets('Memory cleanup on app detached state',
-        (WidgetTester tester) async {
+    testWidgets('Memory cleanup on app detached state', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -216,8 +222,9 @@ void main() {
   });
 
   group('State Preservation', () {
-    testWidgets('Ad state is preserved during navigation',
-        (WidgetTester tester) async {
+    testWidgets('Ad state is preserved during navigation', (
+      WidgetTester tester,
+    ) async {
       final navigatorKey = GlobalKey<NavigatorState>();
 
       await tester.pumpWidget(
@@ -270,8 +277,9 @@ void main() {
       expect(find.byKey(const Key('nav_banner')), findsOneWidget);
     });
 
-    testWidgets('Preloaded ads survive navigation',
-        (WidgetTester tester) async {
+    testWidgets('Preloaded ads survive navigation', (
+      WidgetTester tester,
+    ) async {
       final ads = NativeGoogleads.instance;
       final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -334,14 +342,16 @@ void main() {
         await tester.pumpAndSettle();
 
         // Verify preloaded ad can be shown on second page
-        expect(find.byKey(const Key('preloaded_nav_banner_page2')), findsOneWidget);
+        expect(
+          find.byKey(const Key('preloaded_nav_banner_page2')),
+          findsOneWidget,
+        );
       }
     });
   });
 
   group('Configuration Changes', () {
-    testWidgets('Ads handle theme changes',
-        (WidgetTester tester) async {
+    testWidgets('Ads handle theme changes', (WidgetTester tester) async {
       ThemeMode currentTheme = ThemeMode.light;
 
       await tester.pumpWidget(
@@ -397,8 +407,7 @@ void main() {
       expect(find.byKey(const Key('theme_banner')), findsOneWidget);
     });
 
-    testWidgets('Ads handle locale changes',
-        (WidgetTester tester) async {
+    testWidgets('Ads handle locale changes', (WidgetTester tester) async {
       Locale currentLocale = const Locale('en', 'US');
 
       await tester.pumpWidget(
@@ -406,10 +415,7 @@ void main() {
           builder: (context, setState) {
             return MaterialApp(
               locale: currentLocale,
-              supportedLocales: const [
-                Locale('en', 'US'),
-                Locale('es', 'ES'),
-              ],
+              supportedLocales: const [Locale('en', 'US'), Locale('es', 'ES')],
               home: Scaffold(
                 body: Column(
                   children: [
@@ -451,8 +457,9 @@ void main() {
   });
 
   group('Edge Cases', () {
-    testWidgets('Rapid lifecycle changes stress test',
-        (WidgetTester tester) async {
+    testWidgets('Rapid lifecycle changes stress test', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -471,10 +478,10 @@ void main() {
       for (int i = 0; i < 5; i++) {
         binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
         await tester.pump(const Duration(milliseconds: 100));
-        
+
         binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
         await tester.pump(const Duration(milliseconds: 100));
-        
+
         binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
         await tester.pump(const Duration(milliseconds: 100));
       }
@@ -485,8 +492,9 @@ void main() {
       expect(find.byKey(const Key('stress_lifecycle_banner')), findsOneWidget);
     });
 
-    testWidgets('Ad behavior when app is minimized and restored',
-        (WidgetTester tester) async {
+    testWidgets('Ad behavior when app is minimized and restored', (
+      WidgetTester tester,
+    ) async {
       bool adLoaded = false;
       String? errorMessage;
 

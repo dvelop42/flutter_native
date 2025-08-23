@@ -11,7 +11,7 @@ A Flutter plugin for integrating Google Mobile Ads (AdMob) using native platform
 - ✅ **Native Implementation** - Direct integration with Google Mobile Ads SDK
 - ✅ **iOS & Android Support** - Full support for both platforms
 - ✅ **Banner Ads** - Display banner ads in various sizes including adaptive
-- ✅ **Native Ads** - Show native ads using simple default layouts
+- ✅ **Native Ads** - Fully customizable native ads with templates and styling options
 - ✅ **Interstitial Ads** - Full-screen ads at natural transition points
 - ✅ **Rewarded Ads** - Reward users for watching video ads
 - ✅ **Platform Views** - Native ad rendering using platform-specific views
@@ -32,7 +32,7 @@ Add `native_googleads` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  native_googleads: ^0.0.1
+  native_googleads: ^0.0.3
 ```
 
 Then run:
@@ -345,6 +345,82 @@ NativeAdWidget(
   backgroundColor: Colors.white,
   onAdLoaded: () => print('Native ad loaded'),
   onAdFailedToLoad: (error) => print('Native ad failed: $error'),
+)
+```
+
+#### Customizing Native Ads (New in 0.0.3)
+
+Customize the appearance of native ads with `NativeAdStyle`:
+
+```dart
+NativeAdWidget(
+  adUnitId: AdTestIds.androidNativeAdvanced,
+  height: 350,
+  style: NativeAdStyle(
+    // Typography customization
+    headlineStyle: NativeAdTextStyle(
+      fontSize: 18,
+      fontWeight: FontWeight.bold,
+      textColor: Colors.black87,
+    ),
+    bodyStyle: NativeAdTextStyle(
+      fontSize: 14,
+      textColor: Colors.black54,
+    ),
+    
+    // Layout customization
+    backgroundColor: Colors.white,
+    mainBackgroundColor: Colors.grey[50],
+    cornerRadius: 12,
+    padding: EdgeInsets.all(16),
+    
+    // Media customization
+    mediaStyle: NativeAdMediaStyle(
+      aspectRatio: 16 / 9,
+      cornerRadius: 8,
+    ),
+    
+    // Call-to-action button customization
+    callToActionStyle: NativeAdButtonStyle(
+      backgroundColor: Colors.blue,
+      textColor: Colors.white,
+      cornerRadius: 6,
+    ),
+  ),
+  onAdLoaded: () => print('Styled native ad loaded'),
+)
+```
+
+#### Using Native Ad Templates (New in 0.0.3)
+
+Choose from predefined templates for consistent native ad layouts:
+
+```dart
+NativeAdWidget(
+  adUnitId: AdTestIds.androidNativeAdvanced,
+  template: NativeAdTemplate.medium,  // small, medium, banner, or large
+  height: 320,
+  onAdLoaded: () => print('Template native ad loaded'),
+)
+```
+
+#### Full-Screen Native Ads (New in 0.0.3)
+
+Display native ads in full-screen mode for immersive experiences:
+
+```dart
+NativeAdWidget(
+  adUnitId: AdTestIds.androidNativeAdvanced,
+  isFullScreen: true,
+  style: NativeAdStyle(
+    backgroundColor: Colors.black,
+    headlineStyle: NativeAdTextStyle(
+      fontSize: 24,
+      textColor: Colors.white,
+    ),
+    // ... other style properties
+  ),
+  onAdLoaded: () => print('Full-screen native ad loaded'),
 )
 ```
 
