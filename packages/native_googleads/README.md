@@ -578,6 +578,66 @@ For issues and feature requests, please use the [GitHub issue tracker](https://g
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
 
+## iOS-Specific Features
+
+### Timeout Mechanism for Pending Ad Results
+
+On iOS, the plugin includes an automatic timeout mechanism to prevent memory leaks from pending ad results that may never complete. This feature helps manage edge cases where ad loading fails without proper callbacks.
+
+#### Default Behavior
+- **Default timeout**: 30 seconds
+- **Automatic cleanup**: Removes stale pending results after timeout
+- **Periodic cleanup**: Runs every 60 seconds to clean up very old results
+- **Logging**: Detailed logs in Xcode console for debugging
+
+#### Configuration
+
+You can configure the timeout duration programmatically:
+
+```dart
+// Access the method channel for iOS-specific features
+final ads = NativeGoogleads.instance;
+
+// Set custom timeout (iOS only)
+if (Platform.isIOS) {
+  await ads.methodChannel.invokeMethod('setAdLoadTimeout', {
+    'timeout': 15.0, // Set to 15 seconds
+  });
+}
+```
+
+#### Diagnostic Information
+
+Get diagnostic information about pending results and ad state:
+
+```dart
+if (Platform.isIOS) {
+  final diagnosticInfo = await ads.methodChannel.invokeMethod('getDiagnosticInfo');
+  print('Pending results: ${diagnosticInfo['pendingResultsCount']}');
+  print('Active timers: ${diagnosticInfo['pendingTimersCount']}');
+  print('Current timeout: ${diagnosticInfo['currentTimeout']}s');
+}
+```
+
+#### Testing the Timeout Mechanism
+
+The example app includes a dedicated test page for the timeout mechanism:
+
+1. Navigate to "Timeout Mechanism Test" in the example app (iOS only)
+2. Set a short timeout (e.g., 5 seconds)
+3. Trigger a timeout test with invalid ad unit ID
+4. Check diagnostic info to verify cleanup
+
+#### Implementation Details
+
+- Each pending ad result gets a timeout timer
+- When timeout occurs, the result receives an `AD_LOAD_TIMEOUT` error
+- All associated resources are automatically cleaned up
+- Periodic cleanup removes results older than 2x timeout duration
+- All timers are properly invalidated on plugin deallocation
+
+This mechanism ensures your iOS app maintains optimal memory usage even in edge cases where ad loading encounters unexpected issues.
+
 ---
 
 Made with ❤️ by [Your Name]
