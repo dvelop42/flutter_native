@@ -46,6 +46,12 @@ class NativeGoogleads {
   static NativeGoogleads get instance => _instance;
 
   final MethodChannel _channel = const MethodChannel('native_googleads');
+  
+  /// Provides access to the underlying method channel for advanced use cases.
+  /// 
+  /// Use this for calling platform-specific methods that are not exposed
+  /// through the main API, such as iOS-specific timeout configuration.
+  MethodChannel get methodChannel => _channel;
 
   // Production ID validation options
   bool _disallowTestIdsInRelease = true;

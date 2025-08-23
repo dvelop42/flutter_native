@@ -13,6 +13,12 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
     private var adLoaders: [String: GADAdLoader] = [:]
     private var pendingResults: [String: FlutterResult] = [:]
     
+    // Timeout mechanism for pending results
+    private var pendingResultTimers: [String: Timer] = [:]
+    private var pendingResultTimeout: TimeInterval = 30.0 // 30 seconds timeout (configurable)
+    private var pendingResultTimestamps: [String: Date] = [:] // Track when results were added
+    private var cleanupTimer: Timer?
+    
     // Reverse mapping for O(1) lookups
     private var bannerViewToId: [ObjectIdentifier: String] = [:]
     private var adLoaderToId: [ObjectIdentifier: String] = [:]
@@ -29,6 +35,9 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
         
         let nativeFactory = NativeAdPlatformViewFactory(plugin: instance)
         registrar.register(nativeFactory, withId: "native_googleads/native")
+        
+        // Start periodic cleanup timer (runs every 60 seconds)
+        instance.startPeriodicCleanup()
     }
     
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -173,6 +182,31 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
                                     message: "Native ad ID is required",
                                     details: nil))
             }
+            
+        case "setAdLoadTimeout":
+            if let args = call.arguments as? [String: Any],
+               let timeout = args["timeout"] as? Double {
+                pendingResultTimeout = timeout
+                print("[NativeGoogleadsPlugin] Ad load timeout set to \(timeout) seconds")
+                result(true)
+            } else {
+                result(FlutterError(code: "INVALID_ARGUMENT",
+                                    message: "Timeout value is required",
+                                    details: nil))
+            }
+            
+        case "getDiagnosticInfo":
+            let diagnosticInfo: [String: Any] = [
+                "pendingResultsCount": pendingResults.count,
+                "pendingTimersCount": pendingResultTimers.count,
+                "bannerAdsCount": bannerAds.count,
+                "nativeAdsCount": nativeAds.count,
+                "interstitialAdsCount": interstitialAds.count,
+                "rewardedAdsCount": rewardedAds.count,
+                "currentTimeout": pendingResultTimeout,
+                "pendingResultIds": Array(pendingResults.keys)
+            ]
+            result(diagnosticInfo)
             
         default:
             result(FlutterMethodNotImplemented)
@@ -344,10 +378,10 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
         bannerView.rootViewController = getRootViewController()
         bannerView.delegate = self
         
-        // Store the banner and result for later use
+        // Store the banner and result for later use with timeout
         bannerAds[bannerId] = bannerView
         bannerViewToId[ObjectIdentifier(bannerView)] = bannerId
-        pendingResults[bannerId] = result
+        storePendingResult(bannerId, result: result)
         
         let request = GADRequest()
         bannerView.load(request)
@@ -402,7 +436,7 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
         bannerView.removeFromSuperview()
         bannerViewToId.removeValue(forKey: ObjectIdentifier(bannerView))
         bannerAds.removeValue(forKey: bannerId)
-        pendingResults.removeValue(forKey: bannerId) // Clean up any pending results
+        clearPendingResult(bannerId) // Clean up any pending results with timer
         result(true)
     }
     
@@ -418,10 +452,10 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
         
         adLoader.delegate = self
         
-        // Store the loader and result for later use
+        // Store the loader and result for later use with timeout
         adLoaders[nativeAdId] = adLoader
         adLoaderToId[ObjectIdentifier(adLoader)] = nativeAdId
-        pendingResults[nativeAdId] = result
+        storePendingResult(nativeAdId, result: result)
         
         let request = GADRequest()
         adLoader.load(request)
@@ -450,7 +484,7 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
         
         nativeAds.removeValue(forKey: nativeAdId)
         adLoaders.removeValue(forKey: nativeAdId)
-        pendingResults.removeValue(forKey: nativeAdId) // Clean up any pending results
+        clearPendingResult(nativeAdId) // Clean up any pending results with timer
         result(true)
     }
     
@@ -462,6 +496,131 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
     func getNativeAd(for nativeAdId: String) -> GADNativeAd? {
         return nativeAds[nativeAdId]
     }
+    
+    // MARK: - Timeout Management for Pending Results
+    
+    private func storePendingResult(_ id: String, result: @escaping FlutterResult) {
+        // Store the result and timestamp
+        pendingResults[id] = result
+        pendingResultTimestamps[id] = Date()
+        
+        // Cancel any existing timer for this ID
+        if pendingResultTimers[id] != nil {
+            print("[NativeGoogleadsPlugin] Cancelling existing timer for ID: \(id)")
+            pendingResultTimers[id]?.invalidate()
+        }
+        
+        // Create a new timeout timer
+        let timer = Timer.scheduledTimer(withTimeInterval: pendingResultTimeout, repeats: false) { [weak self] _ in
+            self?.handlePendingResultTimeout(id: id)
+        }
+        
+        pendingResultTimers[id] = timer
+        print("[NativeGoogleadsPlugin] Started timeout timer (\(Int(pendingResultTimeout))s) for ID: \(id)")
+    }
+    
+    private func clearPendingResult(_ id: String) {
+        // Clear the result
+        if pendingResults[id] != nil {
+            pendingResults.removeValue(forKey: id)
+            pendingResultTimestamps.removeValue(forKey: id)
+            print("[NativeGoogleadsPlugin] Cleared pending result for ID: \(id)")
+        }
+        
+        // Cancel and remove the timer
+        if let timer = pendingResultTimers[id] {
+            timer.invalidate()
+            pendingResultTimers.removeValue(forKey: id)
+            print("[NativeGoogleadsPlugin] Cancelled timeout timer for ID: \(id)")
+        }
+    }
+    
+    private func handlePendingResultTimeout(id: String) {
+        print("[NativeGoogleadsPlugin] Timeout reached for pending result with ID: \(id)")
+        
+        // Send timeout error if result still exists
+        if let result = pendingResults[id] {
+            result(FlutterError(
+                code: "AD_LOAD_TIMEOUT",
+                message: "Ad loading timed out after \(Int(pendingResultTimeout)) seconds",
+                details: ["id": id]
+            ))
+        }
+        
+        // Clean up all related resources
+        cleanupResourcesForId(id)
+    }
+    
+    private func cleanupResourcesForId(_ id: String) {
+        // Clear pending result and timer
+        clearPendingResult(id)
+        
+        // Clean up banner resources if applicable
+        if let bannerView = bannerAds[id] {
+            bannerView.removeFromSuperview()
+            bannerViewToId.removeValue(forKey: ObjectIdentifier(bannerView))
+            bannerAds.removeValue(forKey: id)
+        }
+        
+        // Clean up native ad resources if applicable
+        nativeAds.removeValue(forKey: id)
+        
+        // Clean up ad loader resources if applicable
+        if let adLoader = adLoaders[id] {
+            adLoaderToId.removeValue(forKey: ObjectIdentifier(adLoader))
+            adLoaders.removeValue(forKey: id)
+        }
+        
+        print("[NativeGoogleadsPlugin] Cleaned up resources for ID: \(id)")
+    }
+    
+    // MARK: - Periodic Cleanup
+    
+    private func startPeriodicCleanup() {
+        // Run cleanup every 60 seconds
+        cleanupTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
+            self?.performPeriodicCleanup()
+        }
+    }
+    
+    private func performPeriodicCleanup() {
+        let now = Date()
+        var staleIds: [String] = []
+        
+        // Find stale pending results (older than 2x timeout)
+        for (id, timestamp) in pendingResultTimestamps {
+            let age = now.timeIntervalSince(timestamp)
+            if age > pendingResultTimeout * 2 {
+                staleIds.append(id)
+            }
+        }
+        
+        // Clean up stale results
+        if !staleIds.isEmpty {
+            print("[NativeGoogleadsPlugin] Periodic cleanup found \(staleIds.count) stale pending results")
+            for id in staleIds {
+                print("[NativeGoogleadsPlugin] Cleaning up stale result with ID: \(id)")
+                cleanupResourcesForId(id)
+            }
+        }
+    }
+    
+    // Clean up all pending results and timers when plugin is deallocated
+    deinit {
+        // Stop periodic cleanup
+        cleanupTimer?.invalidate()
+        cleanupTimer = nil
+        
+        // Invalidate all timers
+        for (_, timer) in pendingResultTimers {
+            timer.invalidate()
+        }
+        pendingResultTimers.removeAll()
+        pendingResults.removeAll()
+        pendingResultTimestamps.removeAll()
+        
+        print("[NativeGoogleadsPlugin] Plugin deallocated, all timers invalidated")
+    }
 }
 
 extension NativeGoogleadsPlugin: GADBannerViewDelegate {
@@ -471,7 +630,7 @@ extension NativeGoogleadsPlugin: GADBannerViewDelegate {
         
         if let result = pendingResults[bannerId] {
             result(bannerId)
-            pendingResults.removeValue(forKey: bannerId)
+            clearPendingResult(bannerId)
         }
     }
     
@@ -484,7 +643,7 @@ extension NativeGoogleadsPlugin: GADBannerViewDelegate {
             result(FlutterError(code: "AD_LOAD_ERROR",
                                 message: error.localizedDescription,
                                 details: nsError.code))
-            pendingResults.removeValue(forKey: bannerId)
+            clearPendingResult(bannerId)
             bannerViewToId.removeValue(forKey: ObjectIdentifier(bannerView))
             bannerAds.removeValue(forKey: bannerId)
         }
@@ -499,7 +658,7 @@ extension NativeGoogleadsPlugin: GADNativeAdLoaderDelegate {
         nativeAds[nativeAdId] = nativeAd
         if let result = pendingResults[nativeAdId] {
             result(nativeAdId)
-            pendingResults.removeValue(forKey: nativeAdId)
+            clearPendingResult(nativeAdId)
         }
         adLoaderToId.removeValue(forKey: ObjectIdentifier(adLoader))
         adLoaders.removeValue(forKey: nativeAdId)
@@ -514,7 +673,7 @@ extension NativeGoogleadsPlugin: GADNativeAdLoaderDelegate {
             result(FlutterError(code: "AD_LOAD_ERROR",
                                 message: error.localizedDescription,
                                 details: nsError.code))
-            pendingResults.removeValue(forKey: nativeAdId)
+            clearPendingResult(nativeAdId)
         }
         adLoaderToId.removeValue(forKey: ObjectIdentifier(adLoader))
         adLoaders.removeValue(forKey: nativeAdId)
