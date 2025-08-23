@@ -12,6 +12,9 @@ import '../native_googleads.dart';
 /// NativeAdWidget(
 ///   adUnitId: 'ca-app-pub-xxxxx/xxxxx',
 ///   height: 300,
+///   style: NativeAdStyle(
+///     mediaStyle: NativeAdMediaStyle(aspectRatio: 16/9),
+///   ),
 ///   onAdLoaded: () => print('Native ad loaded'),
 ///   onAdFailedToLoad: (error) => print('Native ad failed: $error'),
 /// )
@@ -49,6 +52,15 @@ class NativeAdWidget extends StatefulWidget {
   /// If provided, the widget will skip loading and render this preloaded ad.
   final String? preloadedNativeAdId;
 
+  /// Native ad style configuration
+  final NativeAdStyle? style;
+
+  /// Native ad template type
+  final NativeAdTemplate? template;
+
+  /// Whether to show the ad in full screen mode
+  final bool isFullScreen;
+
   const NativeAdWidget({
     super.key,
     required this.adUnitId,
@@ -61,6 +73,9 @@ class NativeAdWidget extends StatefulWidget {
     this.backgroundColor,
     this.templateId,
     this.preloadedNativeAdId,
+    this.style,
+    this.template,
+    this.isFullScreen = false,
   });
 
   @override
@@ -147,6 +162,9 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
       if (widget.templateId != null) 'templateId': widget.templateId,
       if (widget.backgroundColor != null)
         'backgroundColor': widget.backgroundColor!.toARGB32(),
+      if (widget.style != null) 'style': widget.style!.toMap(),
+      if (widget.template != null) 'template': widget.template!.index,
+      'isFullScreen': widget.isFullScreen,
     };
 
     if (defaultTargetPlatform == TargetPlatform.android) {

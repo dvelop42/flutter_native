@@ -1,10 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:native_googleads/native_googleads.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+void main() => runApp(const MyApp());
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -12,7 +11,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Native Google Ads Example',
+      title: 'Native Ads Demo',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
@@ -22,29 +21,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// Shared small UI helpers (kept in this file for the example)
-class StatusChip extends StatelessWidget {
-  final bool ready;
-  const StatusChip({super.key, required this.ready});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: ready ? Colors.green : Colors.red,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        ready ? 'Ready' : 'Not Ready',
-        style: const TextStyle(color: Colors.white),
-      ),
-    );
-  }
-}
-
-// (MiniActionButtons removed; not needed after multi-preload example removal)
-
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
@@ -53,229 +29,189 @@ class HomePage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: const Text('Native Google Ads Demo'),
+        title: const Text('Native Google Ads'),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.ad_units),
-              title: const Text('Banner Ads'),
-              subtitle: const Text('Display banner ads in your app'),
-              trailing: const Icon(Icons.arrow_forward_ios),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const BannerAdPage()),
-                );
-              },
-            ),
+          _buildCard(
+            icon: Icons.ad_units,
+            title: 'Banner',
+            subtitle: 'Standard banner ads',
+            onTap: () => _navigate(context, const BannerPage()),
           ),
-          const SizedBox(height: 8),
-          const SizedBox(height: 8),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.view_carousel),
-              title: const Text('Native Ads'),
-              subtitle: const Text('Display native ads that match your app'),
-              trailing: const Icon(Icons.arrow_forward_ios),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const NativeAdPage()),
-                );
-              },
-            ),
+          _buildCard(
+            icon: Icons.view_carousel,
+            title: 'Native',
+            subtitle: 'Custom native ads',
+            onTap: () => _navigate(context, const NativePage()),
           ),
-          const SizedBox(height: 8),
-          const SizedBox(height: 8),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.fullscreen),
-              title: const Text('Interstitial Ads'),
-              subtitle: const Text('Full-screen ads at natural transitions'),
-              trailing: const Icon(Icons.arrow_forward_ios),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const InterstitialAdPage()),
-                );
-              },
-            ),
+          _buildCard(
+            icon: Icons.photo_library,
+            title: 'Gallery',
+            subtitle: 'Full screen gallery with ads',
+            onTap: () => _navigate(context, const GalleryPage()),
           ),
-          const SizedBox(height: 8),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.card_giftcard),
-              title: const Text('Rewarded Ads'),
-              subtitle: const Text('Reward users for watching video ads'),
-              trailing: const Icon(Icons.arrow_forward_ios),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const RewardedAdPage()),
-                );
-              },
-            ),
+          _buildCard(
+            icon: Icons.fullscreen,
+            title: 'Interstitial',
+            subtitle: 'Full screen ads',
+            onTap: () => _navigate(context, const InterstitialPage()),
           ),
-          // Simplified: removed preloaded and timeout demo entries
+          _buildCard(
+            icon: Icons.card_giftcard,
+            title: 'Rewarded',
+            subtitle: 'Earn rewards',
+            onTap: () => _navigate(context, const RewardedPage()),
+          ),
         ],
       ),
     );
+  }
+
+  Widget _buildCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Icon(icon),
+        title: Text(title),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: onTap,
+      ),
+    );
+  }
+
+  void _navigate(BuildContext context, Widget page) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
   }
 }
 
 // Banner Ad Page
-class BannerAdPage extends StatefulWidget {
-  const BannerAdPage({super.key});
+class BannerPage extends StatefulWidget {
+  const BannerPage({super.key});
 
   @override
-  State<BannerAdPage> createState() => _BannerAdPageState();
+  State<BannerPage> createState() => _BannerPageState();
 }
 
-class _BannerAdPageState extends State<BannerAdPage> {
-  BannerAdSize _selectedSize = BannerAdSize.adaptive;
-  bool _showAd = false;
-  bool _bannerVisible = true; // hide slot on failure
+class _BannerPageState extends State<BannerPage> {
+  final _ads = NativeGoogleads.instance;
+  String? _bannerId;
+  BannerAdSize _size = BannerAdSize.banner;
+  bool _isLoaded = false;
 
   @override
   void initState() {
     super.initState();
-    _initializeAds();
+    _initialize();
   }
 
-  Future<void> _initializeAds() async {
-    final appId = Platform.isAndroid
-        ? AdTestIds.androidAppId
+  Future<void> _initialize() async {
+    final appId = Platform.isAndroid 
+        ? AdTestIds.androidAppId 
         : AdTestIds.iosAppId;
+    await _ads.initialize(appId: appId);
+  }
 
-    await NativeGoogleads.instance.initialize(appId: appId);
+  Future<void> _loadBanner() async {
+    final adUnitId = Platform.isAndroid
+        ? AdTestIds.androidBanner
+        : AdTestIds.iosBanner;
+    
+    _bannerId = await _ads.loadBannerAd(
+      adUnitId: adUnitId,
+      size: _size,
+    );
+    
+    if (_bannerId != null) {
+      await _ads.showBannerAd(_bannerId!);
+      setState(() => _isLoaded = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_bannerId != null) _ads.disposeBannerAd(_bannerId!);
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final adUnitId = Platform.isAndroid
-        ? AdTestIds.androidBanner
-        : AdTestIds.iosBanner;
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Banner Ads'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-      ),
+      appBar: AppBar(title: const Text('Banner Ads')),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Size', style: TextStyle(fontSize: 16)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8.0,
-                  children: [
-                    for (final size in [
-                      BannerAdSize.adaptive,
-                      BannerAdSize.banner,
-                      BannerAdSize.mediumRectangle,
-                    ])
-                      ChoiceChip(
-                        label: Text(_sizeLabel(size)),
-                        selected: _selectedSize == size,
-                        onSelected: (selected) {
-                          if (selected) {
-                            setState(() {
-                              _selectedSize = size;
-                              _showAd = false;
-                            });
-                          }
-                        },
-                      ),
-                  ],
+                DropdownButton<BannerAdSize>(
+                  value: _size,
+                  isExpanded: true,
+                  items: BannerAdSize.values.map((size) {
+                    return DropdownMenuItem(
+                      value: size,
+                      child: Text(size.name),
+                    );
+                  }).toList(),
+                  onChanged: (size) {
+                    if (size != null) setState(() => _size = size);
+                  },
                 ),
                 const SizedBox(height: 16),
-                Center(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _showAd = !_showAd;
-                      });
-                    },
-                    child: Text(_showAd ? 'Hide Banner' : 'Show Banner'),
-                  ),
+                ElevatedButton(
+                  onPressed: _loadBanner,
+                  child: Text(_isLoaded ? 'Reload' : 'Load Banner'),
                 ),
               ],
             ),
           ),
-          if (_showAd && _bannerVisible)
-            Container(
-              color: Colors.grey[200],
-              padding: const EdgeInsets.all(8.0),
-              child: BannerAdWidget(
-                key: ValueKey(_selectedSize),
-                adUnitId: adUnitId,
-                size: _selectedSize,
-                onAdLoaded: () => setState(() => _bannerVisible = true),
-                onAdFailedToLoad: (_) => setState(() => _bannerVisible = false),
-              ),
+          if (_isLoaded && _bannerId != null)
+            BannerAdWidget(
+              adUnitId: Platform.isAndroid
+                  ? AdTestIds.androidBanner
+                  : AdTestIds.iosBanner,
+              preloadedBannerId: _bannerId,
+              size: _size,
             ),
-          const SizedBox(height: 16),
         ],
       ),
     );
   }
-
-  String _sizeLabel(BannerAdSize size) {
-    switch (size) {
-      case BannerAdSize.banner:
-        return 'Banner';
-      case BannerAdSize.largeBanner:
-        return 'Large';
-      case BannerAdSize.mediumRectangle:
-        return 'Medium';
-      case BannerAdSize.fullBanner:
-        return 'Full';
-      case BannerAdSize.leaderboard:
-        return 'Leader';
-      case BannerAdSize.adaptive:
-        return 'Adaptive';
-    }
-  }
 }
-
-// (Removed: Preloaded Banner Page)
 
 // Native Ad Page
-class NativeAdPage extends StatefulWidget {
-  const NativeAdPage({super.key});
+class NativePage extends StatefulWidget {
+  const NativePage({super.key});
 
   @override
-  State<NativeAdPage> createState() => _NativeAdPageState();
+  State<NativePage> createState() => _NativePageState();
 }
 
-class _NativeAdPageState extends State<NativeAdPage> {
-  final NativeGoogleads _ads = NativeGoogleads.instance;
-  bool _showNativeSlot = true; // hide slot on failure
-  double _adHeight = 300.0; // Default height
+class _NativePageState extends State<NativePage> {
+  final _ads = NativeGoogleads.instance;
   bool _showAd = false;
-  bool _usePreload = false;
-  String? _preloadedNativeId;
-  String _preloadStatus = 'Idle';
+  bool _useCustomStyle = false;
+  NativeAdMediaAspectRatio _aspectRatio = NativeAdMediaAspectRatio.landscape;
+  double _height = 300;
 
   @override
   void initState() {
     super.initState();
-    _initializeAds();
+    _initialize();
   }
 
-  Future<void> _initializeAds() async {
+  Future<void> _initialize() async {
     final appId = Platform.isAndroid
         ? AdTestIds.androidAppId
         : AdTestIds.iosAppId;
-
-    await NativeGoogleads.instance.initialize(appId: appId);
+    await _ads.initialize(appId: appId);
   }
 
   @override
@@ -285,175 +221,289 @@ class _NativeAdPageState extends State<NativeAdPage> {
         : AdTestIds.iosNativeAdvanced;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Native Ads'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-      ),
+      appBar: AppBar(title: const Text('Native Ads')),
       body: Column(
         children: [
-          // Height Control Panel
           Container(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(16),
             color: Colors.grey[100],
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Height', style: TextStyle(fontSize: 16)),
-                const SizedBox(height: 12),
                 Row(
                   children: [
-                    const Text('Height: '),
-                    Expanded(
-                      child: Slider(
-                        value: _adHeight,
-                        min: 100,
-                        max: 500,
-                        divisions: 40,
-                        label: '${_adHeight.round()} dp',
-                        onChanged: (value) {
-                          setState(() {
-                            _adHeight = value;
-                            // Reset ad to apply new height
-                            if (_showAd) {
-                              _showAd = false;
-                            }
-                          });
-                        },
-                      ),
-                    ),
-                    Text('${_adHeight.round()} dp'),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    for (final h in [150.0, 250.0, 350.0, 450.0])
-                      ElevatedButton(
-                        onPressed: () => setState(() {
-                          _adHeight = h;
-                          _showAd = false;
-                        }),
-                        child: Text(h.toInt().toString()),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
+                    const Text('Custom Style'),
                     Switch(
-                      value: _usePreload,
+                      value: _useCustomStyle,
                       onChanged: (v) => setState(() {
-                        _usePreload = v;
-                        _preloadedNativeId = null;
-                        _preloadStatus = 'Idle';
+                        _useCustomStyle = v;
                         _showAd = false;
                       }),
                     ),
-                    const Text('Use preloaded native ad'),
-                    const Spacer(),
-                    if (_usePreload)
-                      ElevatedButton.icon(
-                        onPressed: () async {
-                          setState(() => _preloadStatus = 'Loading...');
-                          final id = await _ads.loadNativeAd(
-                            adUnitId: adUnitId,
-                          );
-                          if (!mounted) return;
-                          setState(() {
-                            _preloadedNativeId = id;
-                            _preloadStatus =
-                                id != null ? 'Ready' : 'Failed';
-                          });
-                        },
-                        icon: const Icon(Icons.download),
-                        label: const Text('Preload'),
-                      ),
                   ],
                 ),
-                if (_usePreload)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text('Preload status: $_preloadStatus',
-                        style: const TextStyle(fontSize: 12)),
-                  ),
-                Center(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _showAd = !_showAd;
-                        _showNativeSlot = true;
-                      });
-                    },
-                    icon: Icon(
-                      _showAd ? Icons.visibility_off : Icons.visibility,
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('16:9'),
+                      selected: _aspectRatio == NativeAdMediaAspectRatio.landscape,
+                      onSelected: (s) => setState(() {
+                        _aspectRatio = NativeAdMediaAspectRatio.landscape;
+                        _showAd = false;
+                      }),
                     ),
-                    label: Text(_showAd ? 'Hide Native Ad' : 'Show Native Ad'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _showAd ? Colors.red : Colors.green,
-                      foregroundColor: Colors.white,
+                    ChoiceChip(
+                      label: const Text('1:1'),
+                      selected: _aspectRatio == NativeAdMediaAspectRatio.square,
+                      onSelected: (s) => setState(() {
+                        _aspectRatio = NativeAdMediaAspectRatio.square;
+                        _showAd = false;
+                      }),
                     ),
-                  ),
+                    ChoiceChip(
+                      label: const Text('9:16'),
+                      selected: _aspectRatio == NativeAdMediaAspectRatio.portrait,
+                      onSelected: (s) => setState(() {
+                        _aspectRatio = NativeAdMediaAspectRatio.portrait;
+                        _showAd = false;
+                      }),
+                    ),
+                  ],
+                ),
+                Slider(
+                  value: _height,
+                  min: 200,
+                  max: 400,
+                  divisions: 20,
+                  label: '${_height.round()}',
+                  onChanged: (v) => setState(() {
+                    _height = v;
+                    _showAd = false;
+                  }),
+                ),
+                ElevatedButton(
+                  onPressed: () => setState(() => _showAd = !_showAd),
+                  child: Text(_showAd ? 'Hide' : 'Show Ad'),
                 ),
               ],
             ),
           ),
-          // Native Ad Display Area
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: ListView.separated(
-                itemCount: 6,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(height: 16),
-                itemBuilder: (context, index) {
-                  if (index == 2 && _showNativeSlot && _showAd) {
-                    return SizedBox(
-                      height: _adHeight,
-                      child: NativeAdWidget(
-                        key: ValueKey('native_ad_$_adHeight'),
-                        adUnitId: adUnitId,
-                        preloadedNativeAdId:
-                            _usePreload ? _preloadedNativeId : null,
-                        height: _adHeight,
-                        backgroundColor: Colors.white,
-                        onAdLoaded: () {
-                          if (!mounted) return;
-                          setState(() => _showNativeSlot = true);
-                        },
-                        onAdFailedToLoad: (_) {
-                          if (!mounted) return;
-                          setState(() => _showNativeSlot = false);
-                        },
-                      ),
-                    );
-                  }
+          if (_showAd)
+            SizedBox(
+              height: _height,
+              child: NativeAdWidget(
+                adUnitId: adUnitId,
+                height: _height,
+                style: _useCustomStyle
+                    ? NativeAdStyle(
+                        mediaStyle: NativeAdMediaStyle(
+                          aspectRatio: _getAspectRatioValue(),
+                          cornerRadius: 8,
+                        ),
+                        headlineTextStyle: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                        backgroundColor: Colors.grey.shade100,
+                        cornerRadius: 12,
+                        padding: const EdgeInsets.all(12),
+                      )
+                    : null,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
-                  // Normal Contents
-                  return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Item ${index + 1}',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Content ${index + 1}',
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        ],
+  double _getAspectRatioValue() {
+    switch (_aspectRatio) {
+      case NativeAdMediaAspectRatio.landscape:
+        return 16 / 9;
+      case NativeAdMediaAspectRatio.portrait:
+        return 9 / 16;
+      case NativeAdMediaAspectRatio.square:
+        return 1;
+      default:
+        return 16 / 9;
+    }
+  }
+}
+
+// Gallery with Full Screen Viewer
+class GalleryPage extends StatelessWidget {
+  const GalleryPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final images = List.generate(20, (i) => 'Image ${i + 1}');
+    
+    return Scaffold(
+      appBar: AppBar(title: const Text('Gallery')),
+      body: GridView.builder(
+        padding: const EdgeInsets.all(4),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 4,
+          mainAxisSpacing: 4,
+        ),
+        itemCount: images.length,
+        itemBuilder: (context, index) {
+          return GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => FullScreenViewer(
+                    images: images,
+                    initialIndex: index,
+                  ),
+                ),
+              );
+            },
+            child: Container(
+              color: Colors.grey.shade300,
+              child: Center(
+                child: Text(
+                  '${index + 1}',
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// Full Screen Image Viewer with Ads
+class FullScreenViewer extends StatefulWidget {
+  final List<String> images;
+  final int initialIndex;
+
+  const FullScreenViewer({
+    super.key,
+    required this.images,
+    required this.initialIndex,
+  });
+
+  @override
+  State<FullScreenViewer> createState() => _FullScreenViewerState();
+}
+
+class _FullScreenViewerState extends State<FullScreenViewer> {
+  late PageController _controller;
+  late List<dynamic> _items;
+  int _current = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
+    
+    _items = [];
+    for (int i = 0; i < widget.images.length; i++) {
+      _items.add(widget.images[i]);
+      if ((i + 1) % 3 == 0 && i < widget.images.length - 1) {
+        _items.add('ad');
+      }
+    }
+    
+    _current = widget.initialIndex + (widget.initialIndex ~/ 3);
+    _controller = PageController(initialPage: _current);
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    final appId = Platform.isAndroid
+        ? AdTestIds.androidAppId
+        : AdTestIds.iosAppId;
+    await NativeGoogleads.instance.initialize(appId: appId);
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final adUnitId = Platform.isAndroid
+        ? AdTestIds.androidNativeAdvanced
+        : AdTestIds.iosNativeAdvanced;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _controller,
+            onPageChanged: (i) => setState(() => _current = i),
+            itemCount: _items.length,
+            itemBuilder: (context, index) {
+              if (_items[index] == 'ad') {
+                return NativeAdWidget(
+                  key: ValueKey('fs_ad_$index'),
+                  adUnitId: adUnitId,
+                  height: MediaQuery.of(context).size.height,
+                  isFullScreen: true,
+                );
+              }
+              return Center(
+                child: Container(
+                  color: Colors.grey.shade900,
+                  child: Center(
+                    child: Text(
+                      _items[index],
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 32,
                       ),
                     ),
-                  );
-                },
+                  ),
+                ),
+              );
+            },
+          ),
+          // Top bar
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.black.withAlpha(180), Colors.transparent],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+              child: SafeArea(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    Text(
+                      '${_current + 1} / ${_items.length}',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    const SizedBox(width: 48),
+                  ],
+                ),
               ),
             ),
           ),
@@ -463,204 +513,86 @@ class _NativeAdPageState extends State<NativeAdPage> {
   }
 }
 
-// (Removed: Preloaded Native Page)
-
 // Interstitial Ad Page
-class InterstitialAdPage extends StatefulWidget {
-  const InterstitialAdPage({super.key});
+class InterstitialPage extends StatefulWidget {
+  const InterstitialPage({super.key});
 
   @override
-  State<InterstitialAdPage> createState() => _InterstitialAdPageState();
+  State<InterstitialPage> createState() => _InterstitialPageState();
 }
 
-class _InterstitialAdPageState extends State<InterstitialAdPage> {
-  final NativeGoogleads _ads = NativeGoogleads.instance;
-  bool _isAdReady = false;
-  String _status = 'Not initialized';
+class _InterstitialPageState extends State<InterstitialPage> {
+  final _ads = NativeGoogleads.instance;
+  bool _ready = false;
+  String _status = 'Init';
 
   @override
   void initState() {
     super.initState();
-    _initializeAds();
+    _initialize();
   }
 
-  Future<void> _initializeAds() async {
-    setState(() {
-      _status = 'Initializing...';
-    });
-
+  Future<void> _initialize() async {
     _ads.setAdCallbacks(
-      onAdDismissed: (adType) {
-        if (adType == 'interstitial') {
-          setState(() {
-            _isAdReady = false;
-            _status = 'Ad dismissed';
-          });
-          // Auto-preload runs natively; refresh readiness shortly after
-          Future<void>(() async {
-            await Future.delayed(const Duration(milliseconds: 200));
-            if (_interstitialAdUnitId != null) {
-              final ready = await _ads.isInterstitialReady(
-                _interstitialAdUnitId!,
-              );
-              if (!mounted) return;
-              setState(() {
-                _isAdReady = ready;
-                if (ready) _status = 'Ready';
-              });
-            }
-          });
-        }
-      },
-      onAdShowed: (adType) {
-        if (adType == 'interstitial') {
-          setState(() {
-            _status = 'Ad showing';
-          });
-        }
-      },
-      onAdFailedToShow: (adType, error) {
-        if (adType == 'interstitial') {
-          setState(() {
-            _status = 'Failed to show: $error';
-          });
-          _showSnackBar('Failed to show ad: $error');
-          // Try to reflect auto-preload status
-          Future<void>(() async {
-            await Future.delayed(const Duration(milliseconds: 200));
-            if (_interstitialAdUnitId != null) {
-              final ready = await _ads.isInterstitialReady(
-                _interstitialAdUnitId!,
-              );
-              if (!mounted) return;
-              setState(() {
-                _isAdReady = ready;
-                if (ready) _status = 'Ready';
-              });
-            }
-          });
-        }
+      onAdDismissed: (type) {
+        if (type == 'interstitial') setState(() => _ready = false);
       },
     );
-
+    
     final appId = Platform.isAndroid
         ? AdTestIds.androidAppId
         : AdTestIds.iosAppId;
-
-    final result = await _ads.initialize(appId: appId);
-
-    if (result != null && result['isReady'] == true) {
-      setState(() {
-        _status = 'Initialized';
-      });
-    } else {
-      setState(() {
-        _status = 'Initialization failed';
-      });
-    }
+    await _ads.initialize(appId: appId);
   }
 
-  String? _interstitialAdUnitId;
-
-  Future<void> _preloadInterstitialAd() async {
-    setState(() {
-      _status = 'Loading ad...';
-    });
-
+  Future<void> _load() async {
+    setState(() => _status = 'Loading...');
     final adUnitId = Platform.isAndroid
         ? AdTestIds.androidInterstitial
         : AdTestIds.iosInterstitial;
-
-    _interstitialAdUnitId = adUnitId;
+    
     final success = await _ads.preloadInterstitialAd(adUnitId: adUnitId);
-
     setState(() {
-      _isAdReady = success;
-      _status = success ? 'Ad loaded' : 'Failed to load ad';
+      _ready = success;
+      _status = success ? 'Ready' : 'Failed';
     });
-
-    if (!success) {
-      _showSnackBar('Failed to load interstitial ad');
-    }
   }
 
-  Future<void> _showInterstitialAd() async {
-    if (!_isAdReady) {
-      _showSnackBar('Interstitial ad is not ready');
-      return;
-    }
-
-    final success = await _ads.showInterstitialAd(
-      adUnitId: _interstitialAdUnitId!,
-    );
-    if (!success) {
-      _showSnackBar('Failed to show interstitial ad');
-    }
-  }
-
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+  Future<void> _show() async {
+    if (!_ready) return;
+    final adUnitId = Platform.isAndroid
+        ? AdTestIds.androidInterstitial
+        : AdTestIds.iosInterstitial;
+    await _ads.showInterstitialAd(adUnitId: adUnitId);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Interstitial Ads'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-      ),
+      appBar: AppBar(title: const Text('Interstitial')),
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.fullscreen,
-                        size: 64,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Interstitial Ad',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text('Status: $_status'),
-                      const SizedBox(height: 8),
-                      Text(_isAdReady ? 'Ready' : 'Not ready'),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: _preloadInterstitialAd,
-                            icon: const Icon(Icons.download),
-                            label: const Text('Preload'),
-                          ),
-                          ElevatedButton.icon(
-                            onPressed: _isAdReady ? _showInterstitialAd : null,
-                            icon: const Icon(Icons.play_arrow),
-                            label: const Text('Show Ad'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.fullscreen, size: 64, color: Colors.blue),
+            const SizedBox(height: 16),
+            Text('Status: $_status'),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton(
+                  onPressed: _load,
+                  child: const Text('Load'),
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: 16),
+                ElevatedButton(
+                  onPressed: _ready ? _show : null,
+                  child: const Text('Show'),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -668,197 +600,84 @@ class _InterstitialAdPageState extends State<InterstitialAdPage> {
 }
 
 // Rewarded Ad Page
-class RewardedAdPage extends StatefulWidget {
-  const RewardedAdPage({super.key});
+class RewardedPage extends StatefulWidget {
+  const RewardedPage({super.key});
 
   @override
-  State<RewardedAdPage> createState() => _RewardedAdPageState();
+  State<RewardedPage> createState() => _RewardedPageState();
 }
 
-
-
-class _RewardedAdPageState extends State<RewardedAdPage> {
-  final NativeGoogleads _ads = NativeGoogleads.instance;
-  bool _isAdReady = false;
-  String _status = 'Not initialized';
-  int _rewardAmount = 0;
+class _RewardedPageState extends State<RewardedPage> {
+  final _ads = NativeGoogleads.instance;
+  bool _ready = false;
+  int _coins = 0;
 
   @override
   void initState() {
     super.initState();
-    _initializeAds();
+    _initialize();
   }
 
-  Future<void> _initializeAds() async {
-    setState(() {
-      _status = 'Initializing...';
-    });
-
+  Future<void> _initialize() async {
     _ads.setAdCallbacks(
-      onAdDismissed: (adType) {
-        if (adType == 'rewarded') {
-          setState(() {
-            _isAdReady = false;
-            _status = 'Ad dismissed';
-          });
-          // Auto-preload runs natively; refresh readiness shortly after
-          Future<void>(() async {
-            await Future.delayed(const Duration(milliseconds: 200));
-            if (_rewardedAdUnitId != null) {
-              final ready = await _ads.isRewardedReady(_rewardedAdUnitId!);
-              if (!mounted) return;
-              setState(() {
-                _isAdReady = ready;
-                if (ready) _status = 'Ready';
-              });
-            }
-          });
-        }
-      },
-      onAdShowed: (adType) {
-        if (adType == 'rewarded') {
-          setState(() {
-            _status = 'Ad showing';
-          });
-        }
-      },
-      onAdFailedToShow: (adType, error) {
-        if (adType == 'rewarded') {
-          setState(() {
-            _status = 'Failed to show: $error';
-          });
-          _showSnackBar('Failed to show ad: $error');
-          // Try to reflect auto-preload status
-          Future<void>(() async {
-            await Future.delayed(const Duration(milliseconds: 200));
-            if (_rewardedAdUnitId != null) {
-              final ready = await _ads.isRewardedReady(_rewardedAdUnitId!);
-              if (!mounted) return;
-              setState(() {
-                _isAdReady = ready;
-                if (ready) _status = 'Ready';
-              });
-            }
-          });
-        }
+      onAdDismissed: (type) {
+        if (type == 'rewarded') setState(() => _ready = false);
       },
       onUserEarnedReward: (type, amount) {
-        setState(() {
-          _rewardAmount += amount;
-          _status = 'Reward earned!';
-        });
-        _showSnackBar('You earned $amount $type!');
+        setState(() => _coins += amount);
       },
     );
-
+    
     final appId = Platform.isAndroid
         ? AdTestIds.androidAppId
         : AdTestIds.iosAppId;
-
-    final result = await _ads.initialize(appId: appId);
-
-    if (result != null && result['isReady'] == true) {
-      setState(() {
-        _status = 'Initialized';
-      });
-    } else {
-      setState(() {
-        _status = 'Initialization failed';
-      });
-    }
+    await _ads.initialize(appId: appId);
   }
 
-  String? _rewardedAdUnitId;
-
-  Future<void> _preloadRewardedAd() async {
-    setState(() {
-      _status = 'Loading ad...';
-    });
-
+  Future<void> _load() async {
     final adUnitId = Platform.isAndroid
         ? AdTestIds.androidRewarded
         : AdTestIds.iosRewarded;
-
-    _rewardedAdUnitId = adUnitId;
+    
     final success = await _ads.preloadRewardedAd(adUnitId: adUnitId);
-
-    setState(() {
-      _isAdReady = success;
-      _status = success ? 'Ad loaded' : 'Failed to load ad';
-    });
-
-    if (!success) {
-      _showSnackBar('Failed to load rewarded ad');
-    }
+    setState(() => _ready = success);
   }
 
-  Future<void> _showRewardedAd() async {
-    if (!_isAdReady) {
-      _showSnackBar('Rewarded ad is not ready');
-      return;
-    }
-
-    final success = await _ads.showRewardedAd(adUnitId: _rewardedAdUnitId!);
-    if (!success) {
-      _showSnackBar('Failed to show rewarded ad');
-    }
-  }
-
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+  Future<void> _show() async {
+    if (!_ready) return;
+    final adUnitId = Platform.isAndroid
+        ? AdTestIds.androidRewarded
+        : AdTestIds.iosRewarded;
+    await _ads.showRewardedAd(adUnitId: adUnitId);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Rewarded Ads'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-      ),
+      appBar: AppBar(title: const Text('Rewarded')),
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      const Text('Rewarded Ad',
-                          style:
-                              TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
-                      Text('Rewards: $_rewardAmount'),
-                      const SizedBox(height: 8),
-                      Text('Status: $_status'),
-                      const SizedBox(height: 8),
-                      Text(_isAdReady ? 'Ready' : 'Not ready'),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: _preloadRewardedAd,
-                            icon: const Icon(Icons.download),
-                            label: const Text('Preload'),
-                          ),
-                          ElevatedButton.icon(
-                            onPressed: _isAdReady ? _showRewardedAd : null,
-                            icon: const Icon(Icons.play_arrow),
-                            label: const Text('Watch Ad'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.monetization_on, size: 64, color: Colors.amber),
+            const SizedBox(height: 16),
+            Text('Coins: $_coins', style: const TextStyle(fontSize: 24)),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton(
+                  onPressed: _load,
+                  child: const Text('Load'),
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: 16),
+                ElevatedButton(
+                  onPressed: _ready ? _show : null,
+                  child: const Text('Watch'),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

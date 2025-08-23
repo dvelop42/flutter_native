@@ -7,6 +7,7 @@ import 'src/ad_config.dart';
 export 'src/ad_config.dart';
 export 'src/banner_ad_widget.dart';
 export 'src/native_ad_widget.dart';
+export 'src/native_ad_style.dart';
 
 /// Callback for ad lifecycle events.
 ///
@@ -406,6 +407,7 @@ class NativeGoogleads {
   ///
   /// [adUnitId] - The ad unit ID for the native ad.
   /// [requestConfig] - Optional configuration for the ad request.
+  /// [mediaAspectRatio] - Optional media aspect ratio preference for the native ad.
   ///
   /// Returns a unique native ad ID if successful, null otherwise.
   ///
@@ -413,11 +415,13 @@ class NativeGoogleads {
   /// ```dart
   /// final nativeAdId = await ads.loadNativeAd(
   ///   adUnitId: 'ca-app-pub-xxxxx/xxxxx',
+  ///   mediaAspectRatio: NativeAdMediaAspectRatio.landscape,
   /// );
   /// ```
   Future<String?> loadNativeAd({
     required String adUnitId,
     AdRequestConfig? requestConfig,
+    NativeAdMediaAspectRatio? mediaAspectRatio,
   }) async {
     _validateAdUnitId(adUnitId);
     try {
@@ -428,6 +432,10 @@ class NativeGoogleads {
 
       if (requestConfig != null) {
         params.addAll(requestConfig.toMap());
+      }
+
+      if (mediaAspectRatio != null) {
+        params['mediaAspectRatio'] = mediaAspectRatio.index;
       }
 
       final result = await _channel.invokeMethod<String>(
@@ -590,6 +598,18 @@ enum BannerAdSize {
   fullBanner, // 468x60
   leaderboard, // 728x90
   adaptive, // Adaptive size based on width
+}
+
+/// Enum for native ad media aspect ratio preferences.
+enum NativeAdMediaAspectRatio {
+  /// Any aspect ratio (default)
+  any,
+  /// Landscape aspect ratio (16:9)
+  landscape,
+  /// Portrait aspect ratio (9:16)
+  portrait,
+  /// Square aspect ratio (1:1)
+  square,
 }
 
 /// Contains Google's test ad unit IDs for development.
