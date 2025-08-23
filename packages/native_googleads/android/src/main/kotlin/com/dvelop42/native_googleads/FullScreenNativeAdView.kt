@@ -170,8 +170,10 @@ class FullScreenNativeAdView(
         // Set the native ad
         nativeAdView?.setNativeAd(nativeAd)
         
-        // Add the native ad view to this container
+        // Add main container to native ad view
         nativeAdView?.addView(mainContainer)
+        
+        // Add native ad view to this FrameLayout
         addView(nativeAdView)
     }
     

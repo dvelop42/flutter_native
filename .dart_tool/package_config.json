@@ -1,0 +1,16 @@
+{
+  "configVersion": 2,
+  "packages": [
+    {
+      "name": "flutter_native",
+      "rootUri": "../",
+      "packageUri": "lib/",
+      "languageVersion": "3.9"
+    }
+  ],
+  "generator": "pub",
+  "generatorVersion": "3.10.0-75.1.beta",
+  "flutterRoot": "file:///Users/dcho/development/flutter",
+  "flutterVersion": "3.36.0-0.1.pre",
+  "pubCache": "file:///Users/dcho/.pub-cache"
+}

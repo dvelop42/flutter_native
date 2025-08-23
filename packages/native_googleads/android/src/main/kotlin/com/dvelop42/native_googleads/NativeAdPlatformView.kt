@@ -174,9 +174,12 @@ class NativeAdPlatformView(
                     
                     // Apply aspect ratio if specified
                     val aspectRatio = mediaStyle?.get("aspectRatio") as? Double
-                    if (aspectRatio != null && aspectRatio > 0) {
+                    if (aspectRatio != null && aspectRatio > 0 && container.width > 0) {
                         // Set height based on aspect ratio
                         height = (container.width / aspectRatio).toInt()
+                    } else {
+                        // Default height if container width not available yet
+                        height = 200
                     }
                 }
                 

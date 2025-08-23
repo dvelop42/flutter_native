@@ -5,6 +5,7 @@ class FullScreenNativeAdView: UIView {
     private var nativeAdView: GADNativeAdView?
     private var nativeAd: GADNativeAd
     private var style: [String: Any]?
+    private var gradientLayer: CAGradientLayer?
     
     init(frame: CGRect, nativeAd: GADNativeAd, style: [String: Any]? = nil) {
         self.nativeAd = nativeAd
@@ -37,18 +38,20 @@ class FullScreenNativeAdView: UIView {
         nativeAdView.mediaView = mediaView
         
         // Gradient overlay for text readability
-        let gradientLayer = CAGradientLayer()
-        gradientLayer.colors = [
+        gradientLayer = CAGradientLayer()
+        gradientLayer?.colors = [
             UIColor.black.withAlphaComponent(0.8).cgColor,
             UIColor.clear.cgColor,
             UIColor.clear.cgColor,
             UIColor.black.withAlphaComponent(0.8).cgColor
         ]
-        gradientLayer.locations = [0, 0.3, 0.7, 1]
-        gradientLayer.frame = bounds
+        gradientLayer?.locations = [0, 0.3, 0.7, 1]
+        gradientLayer?.frame = bounds
         
         let gradientView = UIView()
-        gradientView.layer.addSublayer(gradientLayer)
+        if let gradientLayer = gradientLayer {
+            gradientView.layer.addSublayer(gradientLayer)
+        }
         gradientView.translatesAutoresizingMaskIntoConstraints = false
         mainContainer.addSubview(gradientView)
         
@@ -188,18 +191,11 @@ class FullScreenNativeAdView: UIView {
             nativeAdView.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
         
-        // Update gradient layer frame when bounds change
-        DispatchQueue.main.async {
-            gradientLayer.frame = self.bounds
-        }
     }
     
     override func layoutSubviews() {
         super.layoutSubviews()
-        // Update gradient layer frame
-        if let gradientView = nativeAdView?.subviews.first?.subviews.first(where: { $0.layer.sublayers?.first is CAGradientLayer }),
-           let gradientLayer = gradientView.layer.sublayers?.first as? CAGradientLayer {
-            gradientLayer.frame = bounds
-        }
+        // Update gradient layer frame safely
+        gradientLayer?.frame = bounds
     }
 }

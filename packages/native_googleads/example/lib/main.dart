@@ -400,7 +400,9 @@ class FullScreenViewer extends StatefulWidget {
 class _FullScreenViewerState extends State<FullScreenViewer> {
   late PageController _controller;
   late List<dynamic> _items;
+  final Map<int, String> _preloadedAds = {};
   int _current = 0;
+  final _ads = NativeGoogleads.instance;
 
   @override
   void initState() {
@@ -424,7 +426,31 @@ class _FullScreenViewerState extends State<FullScreenViewer> {
     final appId = Platform.isAndroid
         ? AdTestIds.androidAppId
         : AdTestIds.iosAppId;
-    await NativeGoogleads.instance.initialize(appId: appId);
+    await _ads.initialize(appId: appId);
+    
+    // Preload ads for nearby positions
+    _preloadNearbyAds();
+  }
+  
+  Future<void> _preloadNearbyAds() async {
+    final adUnitId = Platform.isAndroid
+        ? AdTestIds.androidNativeAdvanced
+        : AdTestIds.iosNativeAdvanced;
+    
+    // Preload ads within 2 positions of current
+    for (int i = 0; i < _items.length; i++) {
+      if (_items[i] == 'ad' && (i - _current).abs() <= 2) {
+        if (!_preloadedAds.containsKey(i)) {
+          final adId = await _ads.loadNativeAd(
+            adUnitId: adUnitId,
+            mediaAspectRatio: NativeAdMediaAspectRatio.landscape,
+          );
+          if (adId != null) {
+            _preloadedAds[i] = adId;
+          }
+        }
+      }
+    }
   }
 
   @override
@@ -433,6 +459,10 @@ class _FullScreenViewerState extends State<FullScreenViewer> {
       SystemUiMode.manual,
       overlays: SystemUiOverlay.values,
     );
+    // Clean up preloaded ads
+    for (final adId in _preloadedAds.values) {
+      _ads.disposeNativeAd(adId);
+    }
     _controller.dispose();
     super.dispose();
   }
@@ -449,7 +479,11 @@ class _FullScreenViewerState extends State<FullScreenViewer> {
         children: [
           PageView.builder(
             controller: _controller,
-            onPageChanged: (i) => setState(() => _current = i),
+            onPageChanged: (i) {
+              setState(() => _current = i);
+              // Preload more ads as user navigates
+              _preloadNearbyAds();
+            },
             itemCount: _items.length,
             itemBuilder: (context, index) {
               if (_items[index] == 'ad') {
@@ -458,6 +492,7 @@ class _FullScreenViewerState extends State<FullScreenViewer> {
                   adUnitId: adUnitId,
                   height: MediaQuery.of(context).size.height,
                   isFullScreen: true,
+                  preloadedNativeAdId: _preloadedAds[index],
                 );
               }
               return Center(
