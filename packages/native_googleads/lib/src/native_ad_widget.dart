@@ -96,8 +96,9 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
         'NativeAdWidget: initState called for adUnitId: ${widget.adUnitId}');
     // Initialize creation params once
     _initializeCreationParams();
-    
-    if (widget.preloadedNativeAdId != null && widget.preloadedNativeAdId!.isNotEmpty) {
+
+    if (widget.preloadedNativeAdId != null &&
+        widget.preloadedNativeAdId!.isNotEmpty) {
       _nativeAdId = widget.preloadedNativeAdId;
       _isLoaded = true;
       WidgetsBinding.instance.addPostFrameCallback((_) => _showAd());
@@ -122,20 +123,24 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
   Future<void> _loadAd() async {
     debugPrint('NativeAdWidget: Starting to load ad');
     try {
-      final nativeAdId = await _ads.loadNativeAd(
+      final nativeAdId = await _ads
+          .loadNativeAd(
         adUnitId: widget.adUnitId,
         requestConfig: widget.requestConfig,
-      ).timeout(
+      )
+          .timeout(
         const Duration(seconds: 30),
         onTimeout: () {
           debugPrint('NativeAdWidget: Ad loading timed out');
-          widget.onAdFailedToLoad?.call('Ad loading timed out after 30 seconds');
+          widget.onAdFailedToLoad
+              ?.call('Ad loading timed out after 30 seconds');
           return null;
         },
       );
 
       if (nativeAdId != null && mounted) {
-        debugPrint('NativeAdWidget: Ad loaded successfully with ID: $nativeAdId');
+        debugPrint(
+            'NativeAdWidget: Ad loaded successfully with ID: $nativeAdId');
         setState(() {
           _nativeAdId = nativeAdId;
           _isLoaded = true;
@@ -171,11 +176,7 @@ class _NativeAdWidgetState extends State<NativeAdWidget> {
     // Clean up native ad resources
     if (_nativeAdId != null) {
       _ads.disposeNativeAd(_nativeAdId!);
-      _nativeAdId = null;
     }
-    // Reset state flags
-    _isLoaded = false;
-    _isShowing = false;
     super.dispose();
   }
 

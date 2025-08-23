@@ -73,7 +73,8 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
         'BannerAdWidget: initState called for adUnitId: ${widget.adUnitId}');
     _setAdHeight();
     // If a preloaded bannerId is provided, use it directly
-    if (widget.preloadedBannerId != null && widget.preloadedBannerId!.isNotEmpty) {
+    if (widget.preloadedBannerId != null &&
+        widget.preloadedBannerId!.isNotEmpty) {
       _bannerId = widget.preloadedBannerId;
       _isLoaded = true;
       // Attempt to show immediately
