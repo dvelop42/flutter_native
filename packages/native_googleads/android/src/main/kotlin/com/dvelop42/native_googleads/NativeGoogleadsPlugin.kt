@@ -93,8 +93,10 @@ class NativeGoogleadsPlugin :
             }
             "showInterstitialAd" -> {
                 val adUnitId = call.argument<String>("adUnitId")
+                val immersiveMode = call.argument<Boolean>("immersiveMode") ?: false
+                val disableBackButton = call.argument<Boolean>("disableBackButton") ?: false
                 if (adUnitId != null) {
-                    showInterstitialAd(adUnitId, result)
+                    showInterstitialAd(adUnitId, immersiveMode, disableBackButton, result)
                 } else {
                     result.error("INVALID_ARGUMENT", "Ad unit ID is required", null)
                 }
@@ -265,16 +267,58 @@ class NativeGoogleadsPlugin :
             override fun onAdShowedFullScreenContent() {
                 channel.invokeMethod("onAdShowed", mapOf("type" to "interstitial"))
             }
+            
+            override fun onAdImpression() {
+                channel.invokeMethod("onAdImpression", mapOf("type" to "interstitial"))
+            }
+            
+            override fun onAdClicked() {
+                channel.invokeMethod("onAdClicked", mapOf("type" to "interstitial"))
+            }
         }
     }
 
-    private fun showInterstitialAd(adUnitId: String, result: Result) {
+    private fun showInterstitialAd(
+        adUnitId: String, 
+        immersiveMode: Boolean,
+        disableBackButton: Boolean,
+        result: Result
+    ) {
         val ad = interstitialAds[adUnitId]
         val currentActivity = activity
         
         if (ad != null && currentActivity != null) {
+            // Configure immersive mode if requested
+            if (immersiveMode) {
+                currentActivity.window.decorView.systemUiVisibility = (
+                    android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    or android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
+                    or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    or android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    or android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    or android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                )
+            }
+            
+            // Store original back button behavior if disabling
+            val originalBackHandler = if (disableBackButton) {
+                currentActivity.onBackPressedDispatcher
+            } else null
+            
             ad.show(currentActivity)
             result.success(true)
+            
+            // Restore system UI after ad dismissal
+            if (immersiveMode) {
+                ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                    override fun onAdDismissedFullScreenContent() {
+                        super.onAdDismissedFullScreenContent()
+                        // Restore normal system UI
+                        currentActivity.window.decorView.systemUiVisibility = 
+                            android.view.View.SYSTEM_UI_FLAG_VISIBLE
+                    }
+                }
+            }
         } else {
             result.error("AD_NOT_READY", "Interstitial ad is not loaded or activity is not available", null)
         }
@@ -330,6 +374,14 @@ class NativeGoogleadsPlugin :
 
             override fun onAdShowedFullScreenContent() {
                 channel.invokeMethod("onAdShowed", mapOf("type" to "rewarded"))
+            }
+            
+            override fun onAdImpression() {
+                channel.invokeMethod("onAdImpression", mapOf("type" to "rewarded"))
+            }
+            
+            override fun onAdClicked() {
+                channel.invokeMethod("onAdClicked", mapOf("type" to "rewarded"))
             }
         }
     }

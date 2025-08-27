@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:native_googleads/native_googleads.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -11,6 +12,8 @@ void main() {
 
     setUp(() {
       log.clear();
+      ads.clearTestState(); // Clear any state from previous tests
+      SharedPreferences.setMockInitialValues({}); // Mock SharedPreferences
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(
         const MethodChannel('native_googleads'),
@@ -572,6 +575,8 @@ void main() {
 
     setUp(() {
       log.clear();
+      ads.clearTestState(); // Clear any state from previous tests
+      SharedPreferences.setMockInitialValues({}); // Mock SharedPreferences
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(
         const MethodChannel('native_googleads'),

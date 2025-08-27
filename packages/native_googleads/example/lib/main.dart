@@ -554,6 +554,11 @@ class _InterstitialPageState extends State<InterstitialPage> {
   final _ads = NativeGoogleads.instance;
   bool _ready = false;
   String _status = 'Init';
+  int? _lastLoadTime;
+  double? _avgLoadTime;
+  int _impressions = 0;
+  int _clicks = 0;
+  bool _canShow = true;
 
   @override
   void initState() {
@@ -562,9 +567,30 @@ class _InterstitialPageState extends State<InterstitialPage> {
   }
 
   Future<void> _initialize() async {
+    // Set frequency cap: max 3 impressions per hour
+    await _ads.setInterstitialFrequencyCap(
+      maxImpressions: 3,
+      perHours: 1,
+    );
+    
     _ads.setAdCallbacks(
       onAdDismissed: (type) {
         if (type == 'interstitial') setState(() => _ready = false);
+      },
+      onAdLoadStarted: (type) {
+        if (type == 'interstitial') {
+          setState(() => _status = 'Loading started...');
+        }
+      },
+      onAdImpression: (type) {
+        if (type == 'interstitial') {
+          setState(() => _impressions++);
+        }
+      },
+      onAdClicked: (type) {
+        if (type == 'interstitial') {
+          setState(() => _clicks++);
+        }
       },
     );
 
@@ -580,10 +606,20 @@ class _InterstitialPageState extends State<InterstitialPage> {
         ? AdTestIds.androidInterstitial
         : AdTestIds.iosInterstitial;
 
-    final success = await _ads.preloadInterstitialAd(adUnitId: adUnitId);
+    final success = await _ads.preloadInterstitialAd(
+      adUnitId: adUnitId,
+      config: InterstitialConfig.gaming(), // Use gaming optimized config
+    );
+    
+    // Get load time metrics
+    final loadTime = _ads.getLastLoadTime(adUnitId);
+    final avgTime = _ads.getAverageLoadTime();
+    
     setState(() {
       _ready = success;
       _status = success ? 'Ready' : 'Failed';
+      _lastLoadTime = loadTime;
+      _avgLoadTime = avgTime;
     });
   }
 
@@ -592,6 +628,14 @@ class _InterstitialPageState extends State<InterstitialPage> {
     final adUnitId = Platform.isAndroid
         ? AdTestIds.androidInterstitial
         : AdTestIds.iosInterstitial;
+    
+    // Check frequency cap
+    _canShow = await _ads.canShowInterstitial(adUnitId);
+    if (!_canShow) {
+      setState(() => _status = 'Frequency cap reached!');
+      return;
+    }
+    
     await _ads.showInterstitialAd(adUnitId: adUnitId);
   }
 
@@ -599,24 +643,70 @@ class _InterstitialPageState extends State<InterstitialPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Interstitial')),
-      body: Center(
+      body: Padding(
+        padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.fullscreen, size: 64, color: Colors.blue),
             const SizedBox(height: 16),
-            Text('Status: $_status'),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Text('Status: $_status', style: TextStyle(fontSize: 18)),
+                    const Divider(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        Column(
+                          children: [
+                            Text('Impressions', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            Text('$_impressions', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        Column(
+                          children: [
+                            Text('Clicks', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            Text('$_clicks', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const Divider(),
+                    if (_lastLoadTime != null)
+                      Text('Last Load: ${_lastLoadTime}ms', style: TextStyle(fontSize: 12)),
+                    if (_avgLoadTime != null)
+                      Text('Avg Load: ${_avgLoadTime!.toStringAsFixed(1)}ms', style: TextStyle(fontSize: 12)),
+                    if (!_canShow)
+                      Chip(
+                        label: Text('Frequency Cap Active', style: TextStyle(fontSize: 12)),
+                        backgroundColor: Colors.orange,
+                      ),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                ElevatedButton(onPressed: _load, child: const Text('Load')),
+                ElevatedButton(
+                  onPressed: _load, 
+                  child: const Text('Preload'),
+                ),
                 const SizedBox(width: 16),
                 ElevatedButton(
-                  onPressed: _ready ? _show : null,
+                  onPressed: _ready && _canShow ? _show : null,
                   child: const Text('Show'),
                 ),
               ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Frequency Cap: Max 3 ads per hour',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
         ),

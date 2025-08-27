@@ -1,13 +1,16 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'native_googleads_platform_interface.dart';
 import 'src/ad_config.dart';
+import 'src/interstitial_config.dart';
 
 export 'src/ad_config.dart';
 export 'src/banner_ad_widget.dart';
 export 'src/native_ad_widget.dart';
 export 'src/native_ad_style.dart';
+export 'src/interstitial_config.dart';
 
 /// Callback for ad lifecycle events.
 ///
@@ -63,9 +66,31 @@ class NativeGoogleads {
   AdCallback? _onAdShowed;
   AdErrorCallback? _onAdFailedToShow;
   RewardCallback? _onUserEarnedReward;
+  
+  // Enhanced callbacks
+  AdCallback? _onAdClicked;
+  AdCallback? _onAdImpression;
+  AdCallback? _onAdLoadStarted;
+  
+  // Frequency capping
+  FrequencyCap? _frequencyCap;
+  final Map<String, List<int>> _impressionTimestamps = {};
+  
+  // Load time tracking
+  final Map<String, InterstitialLoadMetrics> _loadMetrics = {};
+  final Map<String, List<int>> _loadDurations = {};
 
   NativeGoogleads._() {
     _channel.setMethodCallHandler(_handleMethodCall);
+  }
+  
+  /// Clear all cached metrics and timestamps (for testing purposes).
+  @visibleForTesting
+  void clearTestState() {
+    _loadMetrics.clear();
+    _loadDurations.clear();
+    _impressionTimestamps.clear();
+    _frequencyCap = null;
   }
 
   /// Configure validation policy for using Google's test ad unit IDs in release.
@@ -159,11 +184,123 @@ class NativeGoogleads {
   }
 
   // No Dart-side caching; handled by platform implementations
+  
+  /// Sets the frequency cap for interstitial ads.
+  /// 
+  /// [maxImpressions] - Maximum number of impressions allowed.
+  /// [perHours] - Time period in hours for the impression limit.
+  /// 
+  /// Example:
+  /// ```dart
+  /// await ads.setInterstitialFrequencyCap(
+  ///   maxImpressions: 3,
+  ///   perHours: 1,
+  /// );
+  /// ```
+  Future<void> setInterstitialFrequencyCap({
+    required int maxImpressions,
+    required int perHours,
+  }) async {
+    _frequencyCap = FrequencyCap(
+      maxImpressions: maxImpressions,
+      perHours: perHours,
+    );
+    
+    // Load existing timestamps from SharedPreferences
+    await _loadImpressionTimestamps();
+  }
+  
+  /// Checks if an interstitial ad can be shown without exceeding frequency cap.
+  /// 
+  /// Returns true if the ad can be shown, false if frequency cap is reached.
+  Future<bool> canShowInterstitial(String adUnitId) async {
+    if (_frequencyCap == null) return true;
+    
+    // Get timestamps for this ad unit
+    final timestamps = _impressionTimestamps[adUnitId] ?? [];
+    
+    // Clean up old timestamps
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final cutoff = now - (_frequencyCap!.perHours * 3600 * 1000);
+    final validTimestamps = timestamps.where((t) => t > cutoff).toList();
+    
+    // Update cached timestamps
+    _impressionTimestamps[adUnitId] = validTimestamps;
+    
+    return !_frequencyCap!.isCapReached(validTimestamps);
+  }
+  
+  /// Gets the last load time for a specific ad unit.
+  /// 
+  /// Returns the load duration in milliseconds, or null if not available.
+  int? getLastLoadTime(String adUnitId) {
+    final metrics = _loadMetrics[adUnitId];
+    return metrics?.loadDurationMs;
+  }
+  
+  /// Gets the average load time across all interstitial ads.
+  /// 
+  /// Returns the average duration in milliseconds, or null if no data.
+  double? getAverageLoadTime() {
+    if (_loadDurations.isEmpty) return null;
+    
+    final allDurations = _loadDurations.values
+        .expand((list) => list)
+        .toList();
+    
+    if (allDurations.isEmpty) return null;
+    
+    final sum = allDurations.reduce((a, b) => a + b);
+    return sum / allDurations.length;
+  }
+  
+  /// Loads impression timestamps from SharedPreferences.
+  Future<void> _loadImpressionTimestamps() async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs.getKeys().where((k) => k.startsWith('ad_impressions_'));
+    
+    for (final key in keys) {
+      final adUnitId = key.replaceFirst('ad_impressions_', '');
+      final timestamps = prefs.getStringList(key) ?? [];
+      _impressionTimestamps[adUnitId] = timestamps
+          .map((s) => int.tryParse(s) ?? 0)
+          .where((t) => t > 0)
+          .toList();
+    }
+  }
+  
+  /// Saves impression timestamps to SharedPreferences.
+  Future<void> _saveImpressionTimestamps(String adUnitId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final timestamps = _impressionTimestamps[adUnitId] ?? [];
+    final stringList = timestamps.map((t) => t.toString()).toList();
+    await prefs.setStringList('ad_impressions_$adUnitId', stringList);
+  }
+  
+  /// Records an ad impression for frequency capping.
+  Future<void> _recordImpression(String adUnitId) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    
+    if (!_impressionTimestamps.containsKey(adUnitId)) {
+      _impressionTimestamps[adUnitId] = [];
+    }
+    
+    _impressionTimestamps[adUnitId]!.add(now);
+    await _saveImpressionTimestamps(adUnitId);
+    
+    // Clean up old timestamps
+    if (_frequencyCap != null) {
+      final cutoff = now - (_frequencyCap!.perHours * 3600 * 1000);
+      _impressionTimestamps[adUnitId] = 
+          _impressionTimestamps[adUnitId]!.where((t) => t > cutoff).toList();
+    }
+  }
 
   /// Preloads an interstitial ad for the given ad unit ID.
   ///
   /// [adUnitId] - The ad unit ID for the interstitial ad.
   /// [requestConfig] - Optional configuration for the ad request.
+  /// [config] - Optional interstitial configuration.
   ///
   /// Returns true if the ad loads successfully, false otherwise.
   ///
@@ -171,13 +308,26 @@ class NativeGoogleads {
   /// ```dart
   /// final success = await ads.preloadInterstitialAd(
   ///   adUnitId: 'ca-app-pub-xxxxx/xxxxx',
+  ///   config: InterstitialConfig.gaming(),
   /// );
   /// ```
   Future<bool> preloadInterstitialAd({
     required String adUnitId,
     AdRequestConfig? requestConfig,
+    InterstitialConfig? config,
   }) async {
     _validateAdUnitId(adUnitId);
+    
+    // Track load start time
+    final loadStartTime = DateTime.now();
+    _loadMetrics[adUnitId] = InterstitialLoadMetrics(
+      adUnitId: adUnitId,
+      loadStartTime: loadStartTime,
+    );
+    
+    // Notify load started callback
+    _onAdLoadStarted?.call('interstitial');
+    
     try {
       final params = <String, dynamic>{
         'adUnitId': adUnitId,
@@ -186,13 +336,48 @@ class NativeGoogleads {
       if (requestConfig != null) {
         params.addAll(requestConfig.toMap());
       }
+      
+      if (config != null) {
+        params.addAll(config.toMap());
+      }
 
       final result = await _channel.invokeMethod<bool>(
         'preloadInterstitialAd',
         params,
       );
+      
+      // Track load completion
+      final loadEndTime = DateTime.now();
+      final metrics = _loadMetrics[adUnitId]!.copyWith(
+        loadEndTime: loadEndTime,
+        success: result ?? false,
+      );
+      _loadMetrics[adUnitId] = metrics;
+      
+      // Store duration for averaging
+      if (metrics.loadDurationMs != null) {
+        if (!_loadDurations.containsKey(adUnitId)) {
+          _loadDurations[adUnitId] = [];
+        }
+        _loadDurations[adUnitId]!.add(metrics.loadDurationMs!);
+        
+        // Keep only last 10 durations per ad unit
+        if (_loadDurations[adUnitId]!.length > 10) {
+          _loadDurations[adUnitId]!.removeAt(0);
+        }
+      }
+      
       return result ?? false;
     } catch (e) {
+      // Track load failure
+      final loadEndTime = DateTime.now();
+      final metrics = _loadMetrics[adUnitId]!.copyWith(
+        loadEndTime: loadEndTime,
+        success: false,
+        errorMessage: e.toString(),
+      );
+      _loadMetrics[adUnitId] = metrics;
+      
       debugPrint('Error loading interstitial ad: $e');
       return false;
     }
@@ -214,16 +399,31 @@ class NativeGoogleads {
 
   /// Shows a preloaded interstitial ad for the given ad unit ID.
   ///
-  /// Returns true if the ad is shown successfully, false if no ad is loaded
-  /// or if showing fails.
+  /// Returns true if the ad is shown successfully, false if no ad is loaded,
+  /// frequency cap is reached, or showing fails.
   ///
   /// Make sure to preload an ad first using [preloadInterstitialAd].
   Future<bool> showInterstitialAd({required String adUnitId}) async {
+    // Check frequency cap
+    if (!await canShowInterstitial(adUnitId)) {
+      debugPrint('Frequency cap reached for ad unit: $adUnitId');
+      return false;
+    }
+    
     try {
       final result = await _channel.invokeMethod<bool>(
         'showInterstitialAd',
         {'adUnitId': adUnitId},
       );
+      
+      if (result == true) {
+        // Record impression for frequency capping
+        await _recordImpression(adUnitId);
+        
+        // Trigger impression callback
+        _onAdImpression?.call('interstitial');
+      }
+      
       return result ?? false;
     } catch (e) {
       debugPrint('Error showing interstitial ad: $e');
@@ -540,11 +740,16 @@ class NativeGoogleads {
   /// [onAdShowed] - Called when an ad is shown.
   /// [onAdFailedToShow] - Called when an ad fails to show.
   /// [onUserEarnedReward] - Called when a user earns a reward from a rewarded ad.
+  /// [onAdClicked] - Called when an ad is clicked.
+  /// [onAdImpression] - Called when an ad impression is recorded.
+  /// [onAdLoadStarted] - Called when ad loading starts.
   ///
   /// Example:
   /// ```dart
   /// ads.setAdCallbacks(
   ///   onAdDismissed: (adType) => print('Ad dismissed: $adType'),
+  ///   onAdClicked: (adType) => print('Ad clicked: $adType'),
+  ///   onAdImpression: (adType) => analytics.track('ad_impression'),
   ///   onUserEarnedReward: (type, amount) => grantReward(amount),
   /// );
   /// ```
@@ -553,11 +758,17 @@ class NativeGoogleads {
     AdCallback? onAdShowed,
     AdErrorCallback? onAdFailedToShow,
     RewardCallback? onUserEarnedReward,
+    AdCallback? onAdClicked,
+    AdCallback? onAdImpression,
+    AdCallback? onAdLoadStarted,
   }) {
     _onAdDismissed = onAdDismissed;
     _onAdShowed = onAdShowed;
     _onAdFailedToShow = onAdFailedToShow;
     _onUserEarnedReward = onUserEarnedReward;
+    _onAdClicked = onAdClicked;
+    _onAdImpression = onAdImpression;
+    _onAdLoadStarted = onAdLoadStarted;
   }
 
   Future<dynamic> _handleMethodCall(MethodCall call) async {
@@ -583,6 +794,14 @@ class NativeGoogleads {
             ? rawAmount.toInt()
             : int.tryParse(rawAmount.toString()) ?? 0;
         _onUserEarnedReward?.call(type, amount);
+        break;
+      case 'onAdClicked':
+        final type = call.arguments['type'] as String;
+        _onAdClicked?.call(type);
+        break;
+      case 'onAdImpression':
+        final type = call.arguments['type'] as String;
+        _onAdImpression?.call(type);
         break;
     }
   }
