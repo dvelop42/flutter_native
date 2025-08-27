@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:native_googleads/native_googleads.dart';
+import 'queue_demo_page.dart';
 
 void main() => runApp(const MyApp());
 
@@ -63,6 +64,12 @@ class HomePage extends StatelessWidget {
             title: 'Rewarded',
             subtitle: 'Earn rewards',
             onTap: () => _navigate(context, const RewardedPage()),
+          ),
+          _buildCard(
+            icon: Icons.queue,
+            title: 'Queue Management',
+            subtitle: 'Advanced interstitial queue demo',
+            onTap: () => _navigate(context, const QueueDemoPage()),
           ),
         ],
       ),
