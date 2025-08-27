@@ -642,7 +642,7 @@ class _InterstitialPageState extends State<InterstitialPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Enhanced Interstitial')),
+      appBar: AppBar(title: const Text('Interstitial')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

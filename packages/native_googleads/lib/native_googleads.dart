@@ -83,6 +83,15 @@ class NativeGoogleads {
   NativeGoogleads._() {
     _channel.setMethodCallHandler(_handleMethodCall);
   }
+  
+  /// Clear all cached metrics and timestamps (for testing purposes).
+  @visibleForTesting
+  void clearTestState() {
+    _loadMetrics.clear();
+    _loadDurations.clear();
+    _impressionTimestamps.clear();
+    _frequencyCap = null;
+  }
 
   /// Configure validation policy for using Google's test ad unit IDs in release.
   ///
