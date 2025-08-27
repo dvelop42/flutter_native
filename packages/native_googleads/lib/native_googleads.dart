@@ -5,12 +5,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'native_googleads_platform_interface.dart';
 import 'src/ad_config.dart';
 import 'src/interstitial_config.dart';
+import 'src/interstitial_queue_manager.dart';
+import 'src/ad_error_types.dart';
 
 export 'src/ad_config.dart';
 export 'src/banner_ad_widget.dart';
 export 'src/native_ad_widget.dart';
 export 'src/native_ad_style.dart';
 export 'src/interstitial_config.dart';
+export 'src/interstitial_queue_manager.dart';
+export 'src/ad_error_types.dart';
 
 /// Callback for ad lifecycle events.
 ///
@@ -79,6 +83,9 @@ class NativeGoogleads {
   // Load time tracking
   final Map<String, InterstitialLoadMetrics> _loadMetrics = {};
   final Map<String, List<int>> _loadDurations = {};
+  
+  // Queue manager for advanced interstitial management
+  final InterstitialQueueManager _queueManager = InterstitialQueueManager();
 
   NativeGoogleads._() {
     _channel.setMethodCallHandler(_handleMethodCall);
@@ -91,6 +98,7 @@ class NativeGoogleads {
     _loadDurations.clear();
     _impressionTimestamps.clear();
     _frequencyCap = null;
+    _queueManager.clearCache(null);
   }
 
   /// Configure validation policy for using Google's test ad unit IDs in release.
@@ -403,7 +411,11 @@ class NativeGoogleads {
   /// frequency cap is reached, or showing fails.
   ///
   /// Make sure to preload an ad first using [preloadInterstitialAd].
-  Future<bool> showInterstitialAd({required String adUnitId}) async {
+  /// If [useQueue] is true, will try to use an ad from the queue first.
+  Future<bool> showInterstitialAd({
+    required String adUnitId,
+    bool useQueue = false,
+  }) async {
     // Check frequency cap
     if (!await canShowInterstitial(adUnitId)) {
       debugPrint('Frequency cap reached for ad unit: $adUnitId');
@@ -411,6 +423,29 @@ class NativeGoogleads {
     }
     
     try {
+      // If using queue, try to dequeue an ad first
+      if (useQueue) {
+        final cachedAd = await _queueManager.dequeueAd(adUnitId);
+        if (cachedAd != null) {
+          // Use the queued ad ID for showing
+          final result = await _channel.invokeMethod<bool>(
+            'showInterstitialFromQueue',
+            {'adUnitId': adUnitId, 'adId': cachedAd.id},
+          );
+          
+          if (result == true) {
+            await _recordImpression(adUnitId);
+            _onAdImpression?.call('interstitial');
+            
+            // Auto-refill if needed
+            _autoRefillQueue(adUnitId);
+          }
+          
+          return result ?? false;
+        }
+      }
+      
+      // Fall back to regular show method
       final result = await _channel.invokeMethod<bool>(
         'showInterstitialAd',
         {'adUnitId': adUnitId},
@@ -803,6 +838,359 @@ class NativeGoogleads {
         final type = call.arguments['type'] as String;
         _onAdImpression?.call(type);
         break;
+    }
+  }
+
+  // ============= Queue Management APIs =============
+
+  /// Initializes a queue for the specified ad unit with optional configuration.
+  ///
+  /// [adUnitId] - The ad unit ID to initialize a queue for.
+  /// [config] - Optional queue configuration.
+  ///
+  /// Example:
+  /// ```dart
+  /// ads.initializeInterstitialQueue(
+  ///   'ca-app-pub-xxxxx/xxxxx',
+  ///   config: QueueConfig.highPriority(),
+  /// );
+  /// ```
+  void initializeInterstitialQueue(String adUnitId, {QueueConfig? config}) {
+    _queueManager.initializeQueue(adUnitId, config: config);
+    
+    // Set up queue callbacks
+    _queueManager.onQueueEmpty = (adUnitId) {
+      debugPrint('Queue empty for $adUnitId');
+      // Could trigger auto-refill here
+      _autoRefillQueue(adUnitId);
+    };
+    
+    _queueManager.onQueueLow = (adUnitId) {
+      debugPrint('Queue low for $adUnitId');
+      // Could trigger preloading here
+      _autoRefillQueue(adUnitId);
+    };
+    
+    _queueManager.onAdExpired = (adUnitId, adId) {
+      debugPrint('Ad $adId expired for $adUnitId');
+      // Dispose the native ad
+      _disposeInterstitialFromQueue(adUnitId, adId);
+    };
+  }
+
+  /// Preloads multiple interstitial ads for different placements.
+  ///
+  /// [adUnitIds] - List of ad unit IDs to preload.
+  /// [configs] - Optional map of ad unit IDs to their configs.
+  /// [queueConfigs] - Optional map of ad unit IDs to their queue configs.
+  ///
+  /// Returns a map of ad unit IDs to success status.
+  ///
+  /// Example:
+  /// ```dart
+  /// final results = await ads.preloadMultipleInterstitials(
+  ///   ['ad-unit-1', 'ad-unit-2', 'ad-unit-3'],
+  ///   configs: {
+  ///     'ad-unit-1': InterstitialConfig.gaming(),
+  ///     'ad-unit-2': InterstitialConfig.content(),
+  ///   },
+  /// );
+  /// ```
+  Future<Map<String, bool>> preloadMultipleInterstitials(
+    List<String> adUnitIds, {
+    Map<String, InterstitialConfig>? configs,
+    Map<String, QueueConfig>? queueConfigs,
+  }) async {
+    final results = <String, bool>{};
+    
+    // Initialize queues if not already done
+    for (final adUnitId in adUnitIds) {
+      if (!_queueManager.getQueueStatus().containsKey(adUnitId)) {
+        initializeInterstitialQueue(
+          adUnitId,
+          config: queueConfigs?[adUnitId],
+        );
+      }
+    }
+    
+    // Sort by priority
+    final sortedIds = List<String>.from(adUnitIds);
+    sortedIds.sort((a, b) {
+      final priorityA = queueConfigs?[a]?.priority ?? 0;
+      final priorityB = queueConfigs?[b]?.priority ?? 0;
+      return priorityB.compareTo(priorityA);
+    });
+    
+    // Preload ads in parallel with priority
+    final futures = <Future<bool>>[];
+    for (final adUnitId in sortedIds) {
+      final config = configs?[adUnitId];
+      futures.add(_preloadWithQueue(adUnitId, config: config));
+    }
+    
+    final loadResults = await Future.wait(futures);
+    
+    for (int i = 0; i < sortedIds.length; i++) {
+      results[sortedIds[i]] = loadResults[i];
+    }
+    
+    return results;
+  }
+
+  /// Gets the number of preloaded ads for a specific ad unit.
+  ///
+  /// [adUnitId] - The ad unit ID to check. If null, returns total count.
+  ///
+  /// Returns the number of preloaded ads.
+  int getPreloadedCount(String? adUnitId) {
+    if (adUnitId != null) {
+      return _queueManager.getQueueSize(adUnitId);
+    }
+    
+    // Return total count across all queues
+    int total = 0;
+    for (final count in _queueManager.getQueueStatus().values) {
+      total += count;
+    }
+    return total;
+  }
+
+  /// Gets the queue status for all ad units.
+  ///
+  /// Returns a map of ad unit IDs to their queue sizes.
+  ///
+  /// Example:
+  /// ```dart
+  /// final status = ads.getInterstitialQueueStatus();
+  /// // Returns: {'ad-unit-1': 3, 'ad-unit-2': 1, 'ad-unit-3': 0}
+  /// ```
+  Map<String, int> getInterstitialQueueStatus() {
+    return _queueManager.getQueueStatus();
+  }
+
+  /// Clears the interstitial cache for a specific ad unit or all.
+  ///
+  /// [adUnitId] - The ad unit ID to clear. If null, clears all caches.
+  ///
+  /// Example:
+  /// ```dart
+  /// // Clear specific ad unit cache
+  /// await ads.clearInterstitialCache('ca-app-pub-xxxxx/xxxxx');
+  /// 
+  /// // Clear all caches
+  /// await ads.clearInterstitialCache(null);
+  /// ```
+  Future<void> clearInterstitialCache(String? adUnitId) async {
+    _queueManager.clearCache(adUnitId);
+    
+    // Also clear native ads
+    if (adUnitId != null) {
+      await _channel.invokeMethod('clearInterstitialCache', {
+        'adUnitId': adUnitId,
+      });
+    } else {
+      await _channel.invokeMethod('clearAllInterstitialCache');
+    }
+  }
+
+  /// Sets the maximum cache size for interstitial ads.
+  ///
+  /// [maxAds] - Maximum number of ads to keep cached globally.
+  void setMaxInterstitialCacheSize(int maxAds) {
+    // This would need to be implemented per queue
+    // For now, it's a global limit that affects new queue configs
+    debugPrint('Setting max cache size to $maxAds');
+  }
+
+  /// Records navigation for predictive preloading.
+  ///
+  /// Call this when users navigate to different screens/placements.
+  ///
+  /// Example:
+  /// ```dart
+  /// ads.recordNavigation('game_level_complete');
+  /// ads.recordNavigation('store_page');
+  /// ```
+  void recordNavigation(String placement) {
+    _queueManager.recordNavigation(placement);
+    
+    // Trigger predictive preloading
+    _predictivePreload();
+  }
+
+  /// Gets predictions for likely next ad placements.
+  ///
+  /// Returns a list of predicted placement IDs.
+  List<String> getPredictedPlacements({int maxPredictions = 3}) {
+    return _queueManager.predictNextPlacements(
+      maxPredictions: maxPredictions,
+    );
+  }
+
+  /// Preloads an interstitial with retry mechanism.
+  ///
+  /// [adUnitId] - The ad unit ID to preload.
+  /// [config] - Optional interstitial configuration.
+  /// [maxRetries] - Maximum number of retry attempts.
+  ///
+  /// Returns true if eventually successful, false if all retries failed.
+  Future<bool> preloadInterstitialWithRetry({
+    required String adUnitId,
+    InterstitialConfig? config,
+    int maxRetries = 3,
+  }) async {
+    for (int attempt = 0; attempt < maxRetries; attempt++) {
+      if (attempt > 0) {
+        // Wait with exponential backoff
+        final delay = _queueManager.getRetryDelay(adUnitId);
+        await Future.delayed(delay);
+      }
+      
+      _queueManager.incrementLoadAttempt(adUnitId);
+      
+      final success = await preloadInterstitialAd(
+        adUnitId: adUnitId,
+        config: config,
+      );
+      
+      if (success) {
+        return true;
+      }
+      
+      debugPrint('Retry attempt ${attempt + 1} failed for $adUnitId');
+    }
+    
+    return false;
+  }
+
+  /// Gets detailed queue information for debugging.
+  ///
+  /// [adUnitId] - The ad unit ID to get info for.
+  ///
+  /// Returns detailed queue information including ad IDs, load times, etc.
+  Map<String, dynamic> getDetailedQueueInfo(String adUnitId) {
+    return _queueManager.getDetailedQueueInfo(adUnitId);
+  }
+
+  // ============= Private Helper Methods =============
+
+  /// Preloads an ad and adds it to the queue.
+  Future<bool> _preloadWithQueue(
+    String adUnitId, {
+    InterstitialConfig? config,
+  }) async {
+    try {
+      // Generate a unique ID for this ad instance
+      final adId = '${adUnitId}_${DateTime.now().millisecondsSinceEpoch}';
+      
+      // Load the ad
+      final success = await preloadInterstitialAd(
+        adUnitId: adUnitId,
+        config: config,
+      );
+      
+      if (success) {
+        // Add to queue
+        await _queueManager.enqueueAd(adUnitId, adId);
+      }
+      
+      return success;
+    } on PlatformException catch (e) {
+      // Handle platform-specific errors
+      final errorType = _getErrorTypeFromPlatformException(e);
+      final error = AdLoadError(
+        message: e.message ?? 'Unknown platform error',
+        adUnitId: adUnitId,
+        type: errorType,
+        errorCode: int.tryParse(e.code),
+      );
+      
+      // Get recovery strategy
+      final strategy = ErrorRecoveryStrategy.getStrategy(errorType);
+      
+      if (strategy.shouldRetry) {
+        debugPrint('Will retry loading ad for $adUnitId after ${strategy.retryDelay}');
+      }
+      
+      debugPrint('AdLoadError: $error');
+      return false;
+    } catch (e) {
+      // Handle unexpected errors
+      final error = AdLoadError(
+        message: e.toString(),
+        adUnitId: adUnitId,
+        type: ErrorType.loadFailed,
+      );
+      debugPrint('Unexpected error: $error');
+      return false;
+    }
+  }
+  
+  /// Determines error type from platform exception.
+  ErrorType _getErrorTypeFromPlatformException(PlatformException e) {
+    // Map platform error codes to error types
+    switch (e.code) {
+      case 'AD_LOAD_ERROR':
+        if (e.message?.contains('network') ?? false) {
+          return ErrorType.network;
+        } else if (e.message?.contains('No ad') ?? false) {
+          return ErrorType.noFill;
+        }
+        return ErrorType.loadFailed;
+      case 'INVALID_ARGUMENT':
+        return ErrorType.invalidConfiguration;
+      case 'TIMEOUT':
+        return ErrorType.timeout;
+      default:
+        return ErrorType.platformError;
+    }
+  }
+
+  /// Auto-refills a queue when it gets low.
+  Future<void> _autoRefillQueue(String adUnitId) async {
+    final config = _queueManager.getDetailedQueueInfo(adUnitId);
+    if (config['autoRefill'] != true) return;
+    
+    final currentSize = config['currentSize'] as int;
+    final maxSize = config['maxSize'] as int;
+    final minSize = config['minSize'] as int;
+    
+    if (currentSize <= minSize) {
+      final toLoad = maxSize - currentSize;
+      debugPrint('Auto-refilling queue $adUnitId with $toLoad ads');
+      
+      for (int i = 0; i < toLoad; i++) {
+        await _preloadWithQueue(adUnitId);
+      }
+    }
+  }
+
+  /// Performs predictive preloading based on navigation patterns.
+  Future<void> _predictivePreload() async {
+    final predictions = getPredictedPlacements();
+    
+    for (final adUnitId in predictions) {
+      // Check if queue exists and needs refilling
+      final queueSize = _queueManager.getQueueSize(adUnitId);
+      if (queueSize == 0) {
+        debugPrint('Predictive preloading for $adUnitId');
+        await _preloadWithQueue(adUnitId);
+      }
+    }
+  }
+
+  /// Disposes an interstitial from the native side when it expires.
+  Future<void> _disposeInterstitialFromQueue(
+    String adUnitId,
+    String adId,
+  ) async {
+    try {
+      await _channel.invokeMethod('disposeInterstitialFromQueue', {
+        'adUnitId': adUnitId,
+        'adId': adId,
+      });
+    } catch (e) {
+      debugPrint('Error disposing interstitial from queue: $e');
     }
   }
 

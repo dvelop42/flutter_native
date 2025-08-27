@@ -45,6 +45,10 @@ class NativeGoogleadsPlugin :
     private val rewardedAds = mutableMapOf<String, RewardedAd>()
     private val bannerAds = mutableMapOf<String, AdView>()
     private val nativeAds = mutableMapOf<String, NativeAd>()
+    
+    // Queue management for multiple interstitials
+    private val interstitialQueues = mutableMapOf<String, MutableMap<String, InterstitialAd>>() // adUnitId -> (adId -> ad)
+    private val interstitialQueueOrder = mutableMapOf<String, MutableList<String>>() // adUnitId -> [adId] (FIFO order)
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, "native_googleads")
@@ -99,6 +103,15 @@ class NativeGoogleadsPlugin :
                     showInterstitialAd(adUnitId, immersiveMode, disableBackButton, result)
                 } else {
                     result.error("INVALID_ARGUMENT", "Ad unit ID is required", null)
+                }
+            }
+            "showInterstitialFromQueue" -> {
+                val adUnitId = call.argument<String>("adUnitId")
+                val adId = call.argument<String>("adId")
+                if (adUnitId != null && adId != null) {
+                    showInterstitialFromQueue(adUnitId, adId, result)
+                } else {
+                    result.error("INVALID_ARGUMENT", "Ad unit ID and ad ID are required", null)
                 }
             }
             "preloadRewardedAd", "loadRewardedAd" -> {
@@ -181,6 +194,27 @@ class NativeGoogleadsPlugin :
                     disposeNativeAd(nativeAdId, result)
                 } else {
                     result.error("INVALID_ARGUMENT", "Native ad ID is required", null)
+                }
+            }
+            // Queue management methods
+            "clearInterstitialCache" -> {
+                val adUnitId = call.argument<String>("adUnitId")
+                if (adUnitId != null) {
+                    clearInterstitialCache(adUnitId, result)
+                } else {
+                    result.error("INVALID_ARGUMENT", "Ad unit ID is required", null)
+                }
+            }
+            "clearAllInterstitialCache" -> {
+                clearAllInterstitialCache(result)
+            }
+            "disposeInterstitialFromQueue" -> {
+                val adUnitId = call.argument<String>("adUnitId")
+                val adId = call.argument<String>("adId")
+                if (adUnitId != null && adId != null) {
+                    disposeInterstitialFromQueue(adUnitId, adId, result)
+                } else {
+                    result.error("INVALID_ARGUMENT", "Ad unit ID and ad ID are required", null)
                 }
             }
             else -> {
@@ -585,6 +619,78 @@ class NativeGoogleadsPlugin :
         }
     }
     
+    // Queue management methods
+    private fun clearInterstitialCache(adUnitId: String, result: Result) {
+        // Clear from regular interstitial ads
+        interstitialAds.remove(adUnitId)
+        
+        // Clear from queue
+        interstitialQueues[adUnitId]?.clear()
+        interstitialQueueOrder[adUnitId]?.clear()
+        
+        result.success(true)
+    }
+    
+    private fun clearAllInterstitialCache(result: Result) {
+        // Clear all regular interstitial ads
+        interstitialAds.clear()
+        
+        // Clear all queues
+        interstitialQueues.clear()
+        interstitialQueueOrder.clear()
+        
+        result.success(true)
+    }
+    
+    private fun disposeInterstitialFromQueue(adUnitId: String, adId: String, result: Result) {
+        // Remove from queue
+        interstitialQueues[adUnitId]?.remove(adId)
+        interstitialQueueOrder[adUnitId]?.remove(adId)
+        
+        result.success(true)
+    }
+    
+    // Helper method to add ad to queue
+    private fun enqueueInterstitialAd(adUnitId: String, adId: String, ad: InterstitialAd) {
+        // Initialize queue if needed
+        if (!interstitialQueues.containsKey(adUnitId)) {
+            interstitialQueues[adUnitId] = mutableMapOf()
+            interstitialQueueOrder[adUnitId] = mutableListOf()
+        }
+        
+        // Add to queue
+        interstitialQueues[adUnitId]!![adId] = ad
+        interstitialQueueOrder[adUnitId]!!.add(adId)
+    }
+    
+    // Helper method to dequeue ad (FIFO)
+    private fun dequeueInterstitialAd(adUnitId: String): InterstitialAd? {
+        val order = interstitialQueueOrder[adUnitId] ?: return null
+        if (order.isEmpty()) return null
+        
+        val adId = order.removeAt(0)
+        return interstitialQueues[adUnitId]?.remove(adId)
+    }
+    
+    // Show interstitial from queue
+    private fun showInterstitialFromQueue(adUnitId: String, adId: String, result: Result) {
+        // Try to get from queue first
+        val ad = interstitialQueues[adUnitId]?.get(adId)
+        if (ad != null) {
+            // Remove from queue
+            interstitialQueues[adUnitId]?.remove(adId)
+            interstitialQueueOrder[adUnitId]?.remove(adId)
+            
+            // Show the ad
+            activity?.let {
+                ad.show(it)
+                result.success(true)
+            } ?: result.error("NO_ACTIVITY", "Activity is not available", null)
+        } else {
+            result.error("AD_NOT_FOUND", "Ad not found in queue", null)
+        }
+    }
+
     // Platform View Factory for Banner Ads
     inner class BannerAdViewFactory(
         private val bannerAds: Map<String, AdView>

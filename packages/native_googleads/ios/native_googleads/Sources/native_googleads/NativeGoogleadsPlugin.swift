@@ -13,6 +13,10 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
     private var adLoaders: [String: GADAdLoader] = [:]
     private var pendingResults: [String: FlutterResult] = [:]
     
+    // Queue management for multiple interstitials
+    private var interstitialQueues: [String: [String: GADInterstitialAd]] = [:] // adUnitId -> [adId: ad]
+    private var interstitialQueueOrder: [String: [String]] = [:] // adUnitId -> [adId] (FIFO order)
+    
     // Timeout mechanism for pending results
     private var pendingResultTimers: [String: Timer] = [:]
     private var pendingResultTimeout: TimeInterval = 30.0 // 30 seconds timeout (configurable)
@@ -79,6 +83,17 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
             } else {
                 result(FlutterError(code: "INVALID_ARGUMENT",
                                     message: "Ad unit ID is required",
+                                    details: nil))
+            }
+            
+        case "showInterstitialFromQueue":
+            if let args = call.arguments as? [String: Any],
+               let adUnitId = args["adUnitId"] as? String,
+               let adId = args["adId"] as? String {
+                showInterstitialFromQueue(adUnitId: adUnitId, adId: adId, result: result)
+            } else {
+                result(FlutterError(code: "INVALID_ARGUMENT",
+                                    message: "Ad unit ID and ad ID are required",
                                     details: nil))
             }
             
@@ -208,6 +223,31 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
                 "pendingResultIds": Array(pendingResults.keys)
             ]
             result(diagnosticInfo)
+            
+        // Queue management methods
+        case "clearInterstitialCache":
+            if let args = call.arguments as? [String: Any],
+               let adUnitId = args["adUnitId"] as? String {
+                clearInterstitialCache(adUnitId: adUnitId, result: result)
+            } else {
+                result(FlutterError(code: "INVALID_ARGUMENT",
+                                    message: "Ad unit ID is required",
+                                    details: nil))
+            }
+            
+        case "clearAllInterstitialCache":
+            clearAllInterstitialCache(result: result)
+            
+        case "disposeInterstitialFromQueue":
+            if let args = call.arguments as? [String: Any],
+               let adUnitId = args["adUnitId"] as? String,
+               let adId = args["adId"] as? String {
+                disposeInterstitialFromQueue(adUnitId: adUnitId, adId: adId, result: result)
+            } else {
+                result(FlutterError(code: "INVALID_ARGUMENT",
+                                    message: "Ad unit ID and ad ID are required",
+                                    details: nil))
+            }
             
         default:
             result(FlutterMethodNotImplemented)
@@ -762,5 +802,121 @@ extension NativeGoogleadsPlugin: GADFullScreenContentDelegate {
         // Called when a click is recorded
         let type = ad is GADInterstitialAd ? "interstitial" : "rewarded"
         channel?.invokeMethod("onAdClicked", arguments: ["type": type])
+    }
+}
+
+// MARK: - Queue Management Methods
+extension NativeGoogleadsPlugin {
+    
+    private func clearInterstitialCache(adUnitId: String, result: @escaping FlutterResult) {
+        // Clear from regular interstitial ads
+        interstitialAds.removeValue(forKey: adUnitId)
+        
+        // Clear from queue
+        if let queue = interstitialQueues[adUnitId] {
+            for ad in queue.values {
+                interstitialToId.removeValue(forKey: ObjectIdentifier(ad))
+            }
+            interstitialQueues.removeValue(forKey: adUnitId)
+            interstitialQueueOrder.removeValue(forKey: adUnitId)
+        }
+        
+        result(true)
+    }
+    
+    private func clearAllInterstitialCache(result: @escaping FlutterResult) {
+        // Clear all regular interstitial ads
+        for ad in interstitialAds.values {
+            interstitialToId.removeValue(forKey: ObjectIdentifier(ad))
+        }
+        interstitialAds.removeAll()
+        
+        // Clear all queues
+        for queue in interstitialQueues.values {
+            for ad in queue.values {
+                interstitialToId.removeValue(forKey: ObjectIdentifier(ad))
+            }
+        }
+        interstitialQueues.removeAll()
+        interstitialQueueOrder.removeAll()
+        
+        result(true)
+    }
+    
+    private func disposeInterstitialFromQueue(adUnitId: String, adId: String, result: @escaping FlutterResult) {
+        // Remove from queue
+        if var queue = interstitialQueues[adUnitId] {
+            if let ad = queue[adId] {
+                interstitialToId.removeValue(forKey: ObjectIdentifier(ad))
+                queue.removeValue(forKey: adId)
+                interstitialQueues[adUnitId] = queue
+                
+                // Remove from order array
+                if var order = interstitialQueueOrder[adUnitId] {
+                    order.removeAll { $0 == adId }
+                    interstitialQueueOrder[adUnitId] = order
+                }
+            }
+        }
+        
+        result(true)
+    }
+    
+    // Helper method to add ad to queue
+    private func enqueueInterstitialAd(adUnitId: String, adId: String, ad: GADInterstitialAd) {
+        // Initialize queue if needed
+        if interstitialQueues[adUnitId] == nil {
+            interstitialQueues[adUnitId] = [:]
+            interstitialQueueOrder[adUnitId] = []
+        }
+        
+        // Add to queue
+        interstitialQueues[adUnitId]?[adId] = ad
+        interstitialQueueOrder[adUnitId]?.append(adId)
+        interstitialToId[ObjectIdentifier(ad)] = "\(adUnitId)_\(adId)"
+    }
+    
+    // Helper method to dequeue ad (FIFO)
+    private func dequeueInterstitialAd(adUnitId: String) -> GADInterstitialAd? {
+        guard var order = interstitialQueueOrder[adUnitId],
+              !order.isEmpty,
+              let adId = order.first,
+              let ad = interstitialQueues[adUnitId]?[adId] else {
+            return nil
+        }
+        
+        // Remove from queue
+        order.removeFirst()
+        interstitialQueueOrder[adUnitId] = order
+        interstitialQueues[adUnitId]?.removeValue(forKey: adId)
+        
+        return ad
+    }
+    
+    // Show interstitial from queue
+    private func showInterstitialFromQueue(adUnitId: String, adId: String, result: @escaping FlutterResult) {
+        // Try to get from queue first
+        if let ad = interstitialQueues[adUnitId]?[adId] {
+            // Remove from queue
+            interstitialQueues[adUnitId]?.removeValue(forKey: adId)
+            if var order = interstitialQueueOrder[adUnitId] {
+                order.removeAll { $0 == adId }
+                interstitialQueueOrder[adUnitId] = order
+            }
+            
+            // Show the ad
+            if let rootViewController = getRootViewController() {
+                ad.present(fromRootViewController: rootViewController)
+                result(true)
+            } else {
+                result(FlutterError(code: "NO_ROOT_VIEW",
+                                    message: "Unable to find root view controller",
+                                    details: nil))
+            }
+        } else {
+            result(FlutterError(code: "AD_NOT_FOUND",
+                                message: "Ad not found in queue",
+                                details: nil))
+        }
     }
 }
