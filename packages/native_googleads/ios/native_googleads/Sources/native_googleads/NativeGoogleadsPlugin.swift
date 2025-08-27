@@ -754,9 +754,13 @@ extension NativeGoogleadsPlugin: GADFullScreenContentDelegate {
     
     public func adDidRecordImpression(_ ad: GADFullScreenPresentingAd) {
         // Called when an impression is recorded
+        let type = ad is GADInterstitialAd ? "interstitial" : "rewarded"
+        channel?.invokeMethod("onAdImpression", arguments: ["type": type])
     }
     
     public func adDidRecordClick(_ ad: GADFullScreenPresentingAd) {
         // Called when a click is recorded
+        let type = ad is GADInterstitialAd ? "interstitial" : "rewarded"
+        channel?.invokeMethod("onAdClicked", arguments: ["type": type])
     }
 }
