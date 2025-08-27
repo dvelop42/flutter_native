@@ -105,6 +105,15 @@ class NativeGoogleadsPlugin :
                     result.error("INVALID_ARGUMENT", "Ad unit ID is required", null)
                 }
             }
+            "showInterstitialFromQueue" -> {
+                val adUnitId = call.argument<String>("adUnitId")
+                val adId = call.argument<String>("adId")
+                if (adUnitId != null && adId != null) {
+                    showInterstitialFromQueue(adUnitId, adId, result)
+                } else {
+                    result.error("INVALID_ARGUMENT", "Ad unit ID and ad ID are required", null)
+                }
+            }
             "preloadRewardedAd", "loadRewardedAd" -> {
                 val adUnitId = call.argument<String>("adUnitId")
                 if (adUnitId != null) {
@@ -661,6 +670,25 @@ class NativeGoogleadsPlugin :
         
         val adId = order.removeAt(0)
         return interstitialQueues[adUnitId]?.remove(adId)
+    }
+    
+    // Show interstitial from queue
+    private fun showInterstitialFromQueue(adUnitId: String, adId: String, result: Result) {
+        // Try to get from queue first
+        val ad = interstitialQueues[adUnitId]?.get(adId)
+        if (ad != null) {
+            // Remove from queue
+            interstitialQueues[adUnitId]?.remove(adId)
+            interstitialQueueOrder[adUnitId]?.remove(adId)
+            
+            // Show the ad
+            activity?.let {
+                ad.show(it)
+                result.success(true)
+            } ?: result.error("NO_ACTIVITY", "Activity is not available", null)
+        } else {
+            result.error("AD_NOT_FOUND", "Ad not found in queue", null)
+        }
     }
 
     // Platform View Factory for Banner Ads

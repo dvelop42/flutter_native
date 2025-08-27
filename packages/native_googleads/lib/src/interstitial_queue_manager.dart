@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:synchronized/synchronized.dart';
 
 /// Configuration for an ad queue.
 @immutable
@@ -87,6 +88,9 @@ class InterstitialQueueManager {
 
   /// Configuration for each ad unit.
   final Map<String, QueueConfig> _queueConfigs = {};
+  
+  /// Lock for thread-safe queue operations.
+  final _lock = Lock();
 
   /// Callbacks for queue events.
   Function(String adUnitId)? onQueueEmpty;
@@ -98,6 +102,9 @@ class InterstitialQueueManager {
 
   /// Whether the manager is active.
   bool _isActive = false;
+  
+  /// Cleanup interval (configurable, default 5 minutes).
+  Duration cleanupInterval = const Duration(minutes: 5);
 
   /// Load attempt tracking for retry logic.
   final Map<String, int> _loadAttempts = {};
@@ -126,14 +133,15 @@ class InterstitialQueueManager {
   }
 
   /// Adds an ad to the queue for the specified ad unit.
-  bool enqueueAd(String adUnitId, String adId, {Duration? customTtl}) {
-    if (!_adQueues.containsKey(adUnitId)) {
-      debugPrint('Warning: Queue not initialized for ad unit: $adUnitId');
-      return false;
-    }
+  Future<bool> enqueueAd(String adUnitId, String adId, {Duration? customTtl}) async {
+    return await _lock.synchronized(() async {
+      if (!_adQueues.containsKey(adUnitId)) {
+        debugPrint('Warning: Queue not initialized for ad unit: $adUnitId');
+        return false;
+      }
 
-    final config = _queueConfigs[adUnitId]!;
-    final queue = _adQueues[adUnitId]!;
+      final config = _queueConfigs[adUnitId]!;
+      final queue = _adQueues[adUnitId]!;
 
     // Check if queue is at max capacity
     if (queue.length >= config.maxSize) {
@@ -157,17 +165,19 @@ class InterstitialQueueManager {
     _loadAttempts[adUnitId] = 0;
     _backoffDelays[adUnitId] = Duration.zero;
 
-    debugPrint('Ad $adId added to queue for $adUnitId. Queue size: ${queue.length}');
-    return true;
+      debugPrint('Ad $adId added to queue for $adUnitId. Queue size: ${queue.length}');
+      return true;
+    });
   }
 
   /// Retrieves the next ad from the queue (FIFO).
-  CachedInterstitialAd? dequeueAd(String adUnitId) {
-    final queue = _adQueues[adUnitId];
-    if (queue == null || queue.isEmpty) {
-      onQueueEmpty?.call(adUnitId);
-      return null;
-    }
+  Future<CachedInterstitialAd?> dequeueAd(String adUnitId) async {
+    return await _lock.synchronized(() async {
+      final queue = _adQueues[adUnitId];
+      if (queue == null || queue.isEmpty) {
+        onQueueEmpty?.call(adUnitId);
+        return null;
+      }
 
     // Remove expired ads first
     _removeExpiredAds(adUnitId);
@@ -185,8 +195,9 @@ class InterstitialQueueManager {
       onQueueLow?.call(adUnitId);
     }
 
-    debugPrint('Ad ${ad.id} dequeued from $adUnitId. Queue size: ${queue.length}');
-    return ad;
+      debugPrint('Ad ${ad.id} dequeued from $adUnitId. Queue size: ${queue.length}');
+      return ad;
+    });
   }
 
   /// Gets the number of ads in the queue for a specific ad unit.
@@ -236,14 +247,22 @@ class InterstitialQueueManager {
       final queue = _adQueues[adUnitId];
       if (queue != null) {
         for (final ad in queue) {
-          onAdExpired?.call(adUnitId, ad.id);
+          try {
+            onAdExpired?.call(adUnitId, ad.id);
+          } catch (e) {
+            debugPrint('Error in onAdExpired callback during cache clear: $e');
+          }
         }
         queue.clear();
       }
     } else {
       for (final entry in _adQueues.entries) {
         for (final ad in entry.value) {
-          onAdExpired?.call(entry.key, ad.id);
+          try {
+            onAdExpired?.call(entry.key, ad.id);
+          } catch (e) {
+            debugPrint('Error in onAdExpired callback during cache clear: $e');
+          }
         }
         entry.value.clear();
       }
@@ -326,25 +345,20 @@ class InterstitialQueueManager {
     final queue = _adQueues[adUnitId];
     if (queue == null) return;
 
-    final expired = <CachedInterstitialAd>[];
-    final valid = <CachedInterstitialAd>[];
-
-    for (final ad in queue) {
-      if (ad.isValid) {
-        valid.add(ad);
-      } else {
-        expired.add(ad);
-      }
-    }
-
-    if (expired.isNotEmpty) {
-      queue.clear();
-      queue.addAll(valid);
-      
-      for (final ad in expired) {
+    // Find expired ads before removing them
+    final expiredAds = queue.where((ad) => !ad.isValid).toList();
+    
+    // Remove expired ads in-place for better memory efficiency
+    queue.removeWhere((ad) => !ad.isValid);
+    
+    // Call callbacks for expired ads with error handling
+    for (final ad in expiredAds) {
+      try {
         onAdExpired?.call(adUnitId, ad.id);
-        debugPrint('Expired ad ${ad.id} removed from queue $adUnitId');
+      } catch (e) {
+        debugPrint('Error in onAdExpired callback for ad ${ad.id}: $e');
       }
+      debugPrint('Expired ad ${ad.id} removed from queue $adUnitId');
     }
   }
 
@@ -352,7 +366,7 @@ class InterstitialQueueManager {
   void _startCleanupTimer() {
     _cleanupTimer?.cancel();
     _cleanupTimer = Timer.periodic(
-      const Duration(minutes: 1),
+      cleanupInterval,
       (_) => _performCleanup(),
     );
     _isActive = true;

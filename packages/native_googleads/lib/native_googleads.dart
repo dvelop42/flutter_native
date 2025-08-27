@@ -6,6 +6,7 @@ import 'native_googleads_platform_interface.dart';
 import 'src/ad_config.dart';
 import 'src/interstitial_config.dart';
 import 'src/interstitial_queue_manager.dart';
+import 'src/ad_error_types.dart';
 
 export 'src/ad_config.dart';
 export 'src/banner_ad_widget.dart';
@@ -13,6 +14,7 @@ export 'src/native_ad_widget.dart';
 export 'src/native_ad_style.dart';
 export 'src/interstitial_config.dart';
 export 'src/interstitial_queue_manager.dart';
+export 'src/ad_error_types.dart';
 
 /// Callback for ad lifecycle events.
 ///
@@ -421,6 +423,29 @@ class NativeGoogleads {
     }
     
     try {
+      // If using queue, try to dequeue an ad first
+      if (useQueue) {
+        final cachedAd = await _queueManager.dequeueAd(adUnitId);
+        if (cachedAd != null) {
+          // Use the queued ad ID for showing
+          final result = await _channel.invokeMethod<bool>(
+            'showInterstitialFromQueue',
+            {'adUnitId': adUnitId, 'adId': cachedAd.id},
+          );
+          
+          if (result == true) {
+            await _recordImpression(adUnitId);
+            _onAdImpression?.call('interstitial');
+            
+            // Auto-refill if needed
+            _autoRefillQueue(adUnitId);
+          }
+          
+          return result ?? false;
+        }
+      }
+      
+      // Fall back to regular show method
       final result = await _channel.invokeMethod<bool>(
         'showInterstitialAd',
         {'adUnitId': adUnitId},
@@ -1066,13 +1091,58 @@ class NativeGoogleads {
       
       if (success) {
         // Add to queue
-        _queueManager.enqueueAd(adUnitId, adId);
+        await _queueManager.enqueueAd(adUnitId, adId);
       }
       
       return success;
-    } catch (e) {
-      debugPrint('Error preloading with queue: $e');
+    } on PlatformException catch (e) {
+      // Handle platform-specific errors
+      final errorType = _getErrorTypeFromPlatformException(e);
+      final error = AdLoadError(
+        message: e.message ?? 'Unknown platform error',
+        adUnitId: adUnitId,
+        type: errorType,
+        errorCode: int.tryParse(e.code),
+      );
+      
+      // Get recovery strategy
+      final strategy = ErrorRecoveryStrategy.getStrategy(errorType);
+      
+      if (strategy.shouldRetry) {
+        debugPrint('Will retry loading ad for $adUnitId after ${strategy.retryDelay}');
+      }
+      
+      debugPrint('AdLoadError: $error');
       return false;
+    } catch (e) {
+      // Handle unexpected errors
+      final error = AdLoadError(
+        message: e.toString(),
+        adUnitId: adUnitId,
+        type: ErrorType.loadFailed,
+      );
+      debugPrint('Unexpected error: $error');
+      return false;
+    }
+  }
+  
+  /// Determines error type from platform exception.
+  ErrorType _getErrorTypeFromPlatformException(PlatformException e) {
+    // Map platform error codes to error types
+    switch (e.code) {
+      case 'AD_LOAD_ERROR':
+        if (e.message?.contains('network') ?? false) {
+          return ErrorType.network;
+        } else if (e.message?.contains('No ad') ?? false) {
+          return ErrorType.noFill;
+        }
+        return ErrorType.loadFailed;
+      case 'INVALID_ARGUMENT':
+        return ErrorType.invalidConfiguration;
+      case 'TIMEOUT':
+        return ErrorType.timeout;
+      default:
+        return ErrorType.platformError;
     }
   }
 

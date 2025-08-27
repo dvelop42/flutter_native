@@ -86,6 +86,17 @@ public class NativeGoogleadsPlugin: NSObject, FlutterPlugin {
                                     details: nil))
             }
             
+        case "showInterstitialFromQueue":
+            if let args = call.arguments as? [String: Any],
+               let adUnitId = args["adUnitId"] as? String,
+               let adId = args["adId"] as? String {
+                showInterstitialFromQueue(adUnitId: adUnitId, adId: adId, result: result)
+            } else {
+                result(FlutterError(code: "INVALID_ARGUMENT",
+                                    message: "Ad unit ID and ad ID are required",
+                                    details: nil))
+            }
+            
         case "preloadRewardedAd", "loadRewardedAd":
             if let args = call.arguments as? [String: Any],
                let adUnitId = args["adUnitId"] as? String {
@@ -880,5 +891,32 @@ extension NativeGoogleadsPlugin {
         interstitialQueues[adUnitId]?.removeValue(forKey: adId)
         
         return ad
+    }
+    
+    // Show interstitial from queue
+    private func showInterstitialFromQueue(adUnitId: String, adId: String, result: @escaping FlutterResult) {
+        // Try to get from queue first
+        if let ad = interstitialQueues[adUnitId]?[adId] {
+            // Remove from queue
+            interstitialQueues[adUnitId]?.removeValue(forKey: adId)
+            if var order = interstitialQueueOrder[adUnitId] {
+                order.removeAll { $0 == adId }
+                interstitialQueueOrder[adUnitId] = order
+            }
+            
+            // Show the ad
+            if let rootViewController = getRootViewController() {
+                ad.present(fromRootViewController: rootViewController)
+                result(true)
+            } else {
+                result(FlutterError(code: "NO_ROOT_VIEW",
+                                    message: "Unable to find root view controller",
+                                    details: nil))
+            }
+        } else {
+            result(FlutterError(code: "AD_NOT_FOUND",
+                                message: "Ad not found in queue",
+                                details: nil))
+        }
     }
 }

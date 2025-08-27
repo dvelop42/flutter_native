@@ -78,28 +78,28 @@ void main() {
       expect(queueManager.getQueueStatus()[adUnitId], equals(0));
     });
 
-    test('Enqueue and dequeue ads FIFO order', () {
+    test('Enqueue and dequeue ads FIFO order', () async {
       const adUnitId = 'test-ad-unit';
       queueManager.initializeQueue(adUnitId);
       
       // Add ads
-      queueManager.enqueueAd(adUnitId, 'ad1');
-      queueManager.enqueueAd(adUnitId, 'ad2');
-      queueManager.enqueueAd(adUnitId, 'ad3');
+      await queueManager.enqueueAd(adUnitId, 'ad1');
+      await queueManager.enqueueAd(adUnitId, 'ad2');
+      await queueManager.enqueueAd(adUnitId, 'ad3');
       
       expect(queueManager.getQueueSize(adUnitId), equals(3));
       
       // Remove ads (FIFO)
-      final ad1 = queueManager.dequeueAd(adUnitId);
+      final ad1 = await queueManager.dequeueAd(adUnitId);
       expect(ad1?.id, equals('ad1'));
       
-      final ad2 = queueManager.dequeueAd(adUnitId);
+      final ad2 = await queueManager.dequeueAd(adUnitId);
       expect(ad2?.id, equals('ad2'));
       
       expect(queueManager.getQueueSize(adUnitId), equals(1));
     });
 
-    test('Queue respects max size limit', () {
+    test('Queue respects max size limit', () async {
       const adUnitId = 'test-ad-unit';
       const config = QueueConfig(maxSize: 2);
       queueManager.initializeQueue(adUnitId, config: config);
@@ -111,16 +111,16 @@ void main() {
         expiredAdId = adId;
       };
       
-      queueManager.enqueueAd(adUnitId, 'ad1');
-      queueManager.enqueueAd(adUnitId, 'ad2');
-      queueManager.enqueueAd(adUnitId, 'ad3'); // Should remove ad1
+      await queueManager.enqueueAd(adUnitId, 'ad1');
+      await queueManager.enqueueAd(adUnitId, 'ad2');
+      await queueManager.enqueueAd(adUnitId, 'ad3'); // Should remove ad1
       
       expect(queueManager.getQueueSize(adUnitId), equals(2));
       expect(expiredCalled, isTrue);
       expect(expiredAdId, equals('ad1'));
     });
 
-    test('Queue callbacks trigger correctly', () {
+    test('Queue callbacks trigger correctly', () async {
       const adUnitId = 'test-ad-unit';
       const config = QueueConfig(minSize: 1);
       queueManager.initializeQueue(adUnitId, config: config);
@@ -136,20 +136,20 @@ void main() {
         lowCallbackTriggered = true;
       };
       
-      queueManager.enqueueAd(adUnitId, 'ad1');
-      queueManager.enqueueAd(adUnitId, 'ad2');
+      await queueManager.enqueueAd(adUnitId, 'ad1');
+      await queueManager.enqueueAd(adUnitId, 'ad2');
       
       // Dequeue to trigger low callback
-      queueManager.dequeueAd(adUnitId);
+      await queueManager.dequeueAd(adUnitId);
       expect(lowCallbackTriggered, isTrue);
       
       // Dequeue to trigger empty callback
-      queueManager.dequeueAd(adUnitId);
-      queueManager.dequeueAd(adUnitId); // Try dequeue from empty
+      await queueManager.dequeueAd(adUnitId);
+      await queueManager.dequeueAd(adUnitId); // Try dequeue from empty
       expect(emptyCallbackTriggered, isTrue);
     });
 
-    test('Get queues needing refill returns correct list', () {
+    test('Get queues needing refill returns correct list', () async {
       queueManager.initializeQueue('high', 
         config: QueueConfig.highPriority());
       queueManager.initializeQueue('low', 
@@ -158,8 +158,8 @@ void main() {
         config: const QueueConfig(minSize: 2, autoRefill: true));
       
       // Add ads
-      queueManager.enqueueAd('high', 'ad1'); // Below minSize (2)
-      queueManager.enqueueAd('normal', 'ad1'); // Below minSize (2)
+      await queueManager.enqueueAd('high', 'ad1'); // Below minSize (2)
+      await queueManager.enqueueAd('normal', 'ad1'); // Below minSize (2)
       // 'low' has autoRefill=false, shouldn't appear
       
       final needsRefill = queueManager.getQueuesNeedingRefill();
@@ -169,12 +169,12 @@ void main() {
       expect(needsRefill[1], equals('normal'));
     });
 
-    test('Clear cache removes all ads', () {
+    test('Clear cache removes all ads', () async {
       const adUnitId = 'test-ad-unit';
       queueManager.initializeQueue(adUnitId);
       
-      queueManager.enqueueAd(adUnitId, 'ad1');
-      queueManager.enqueueAd(adUnitId, 'ad2');
+      await queueManager.enqueueAd(adUnitId, 'ad1');
+      await queueManager.enqueueAd(adUnitId, 'ad2');
       
       expect(queueManager.getQueueSize(adUnitId), equals(2));
       
@@ -220,7 +220,7 @@ void main() {
       expect(queueManager.isRetryLimitReached(adUnitId), isTrue);
     });
 
-    test('Detailed queue info returns correct data', () {
+    test('Detailed queue info returns correct data', () async {
       const adUnitId = 'test-ad-unit';
       const config = QueueConfig(
         maxSize: 5,
@@ -229,8 +229,8 @@ void main() {
       );
       queueManager.initializeQueue(adUnitId, config: config);
       
-      queueManager.enqueueAd(adUnitId, 'ad1');
-      queueManager.enqueueAd(adUnitId, 'ad2');
+      await queueManager.enqueueAd(adUnitId, 'ad1');
+      await queueManager.enqueueAd(adUnitId, 'ad2');
       
       final info = queueManager.getDetailedQueueInfo(adUnitId);
       
